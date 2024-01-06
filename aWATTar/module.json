@@ -1,0 +1,15 @@
+{
+    "id": "{BFC9A6DB-1308-5C42-B760-2977DD84AB38}",
+    "name": "aWATTar",
+    "type": 3,
+    "vendor": "aWATTar",
+    "aliases": [
+        "aWATTar Marketdata",
+        "aWATTar Strompreise"
+    ],
+    "parentRequirements": [],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "aWATTar",
+    "url": ""
+}

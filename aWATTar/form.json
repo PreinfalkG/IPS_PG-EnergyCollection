@@ -1,0 +1,115 @@
+{
+    "elements": [
+        {
+            "name": "EnableAutoUpdate",
+            "type": "CheckBox",
+            "caption": "Auto Update"
+        },
+        {
+            "name": "LogLevel",
+            "type": "Select",
+            "caption": "Debug/Log Level",
+            "options": [
+                {
+                    "label": "ALL",
+                    "value": 9
+                },
+                {
+                    "label": "TEST",
+                    "value": 8
+                },
+                {
+                    "label": "TRACE",
+                    "value": 7
+                },
+                {
+                    "label": "COMMUNICATION",
+                    "value": 6
+                },
+                {
+                    "label": "DEBUG",
+                    "value": 5
+                },
+                {
+                    "label": "INFO",
+                    "value": 4
+                },
+                {
+                    "label": "WARN",
+                    "value": 3
+                },
+                {
+                    "label": "ERROR",
+                    "value": 2
+                },
+                {
+                    "label": "FATAL",
+                    "value": 1
+                },
+                {
+                    "label": "OFF",
+                    "value": 0
+                }
+            ]
+        },
+        {
+            "type": "CheckBox",
+            "caption": "Berechne Brutto Preise",
+            "name": "cb_CalcBruttoPreise"
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "label": "Update Marketdata",
+            "onClick": "aWATTar_UpdateMarketdata($id, 'ModulForm');"
+        },
+        {
+            "type": "Button",
+            "label": "Create LowPrice_1h ",
+            "onClick": "aWATTar_LowPrice_1h($id, 'ModulForm');"
+        },
+        {
+            "type": "Button",
+            "label": "Create LowPrice_2h ",
+            "onClick": "aWATTar_LowPrice_2h($id, 'ModulForm');"
+        },        
+        {
+            "type": "Button",
+            "label": "Create LowPrice_3h ",
+            "onClick": "aWATTar_LowPrice_3h($id, 'ModulForm');"
+        },
+        {
+            "type": "Button",
+            "label": "Create LowPrice_4 ",
+            "onClick": "aWATTar_LowPrice_4h($id, 'ModulForm');"
+        },
+        {
+            "type": "Button",
+            "label": "Create LowPrice_5 ",
+            "onClick": "aWATTar_LowPrice_5h($id, 'ModulForm');"
+        },
+        {
+            "type": "Button",
+            "caption": "Reset Counter Variables",
+            "onClick": "aWATTar_ResetCounterVariables($id, 'ModulForm');"
+        }        
+    ],
+    "status": [
+        {
+            "code": 101,
+            "icon": "inactive",
+            "caption": "Enable AUTO Update."
+        },
+        {
+            "code": 102,
+            "icon": "active",
+            "caption": "Connection to aWATTar api has been established."
+        },
+        {
+            "code": 200,
+            "icon": "inactive",
+            "caption": "Error: Could not connect to aWATTar api."
+        }
+    ]
+}

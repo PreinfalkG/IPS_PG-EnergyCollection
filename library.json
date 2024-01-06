@@ -1,0 +1,12 @@
+{
+    "id": "{0CD8A895-52E9-5E26-E35C-C0F574FB1F53}",
+    "name": "IPS_PG Energy Collection",
+    "author": "PreinfalkG",
+    "url": "",
+    "compatibility": {
+        "version": "7.0"
+    },
+    "version": "0.1",
+    "build": 20240106,
+    "date": 0
+}
