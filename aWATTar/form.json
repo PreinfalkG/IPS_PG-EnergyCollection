@@ -64,36 +64,39 @@
             "label": "Update Marketdata",
             "onClick": "aWATTar_UpdateMarketdata($id, 'ModulForm');"
         },
+
         {
             "type": "Button",
-            "label": "Create LowPrice_1h ",
-            "onClick": "aWATTar_LowPrice_1h($id, 'ModulForm');"
+            "label": "Get Marketprices LowerThan 11.6 | 3h | true",
+            "onClick": "aWATTar_GetMarketpricesLowerThan($id, 'ModulForm', 11.6, 3, true);"
         },
         {
             "type": "Button",
-            "label": "Create LowPrice_2h ",
-            "onClick": "aWATTar_LowPrice_2h($id, 'ModulForm');"
-        },        
+            "label": "Get Marketprices LowerThan 12.8 | 6h | false",
+            "onClick": "aWATTar_GetMarketpricesLowerThan($id, 'ModulForm', 12.9, 6, false);"
+        },
+
         {
             "type": "Button",
-            "label": "Create LowPrice_3h ",
-            "onClick": "aWATTar_LowPrice_3h($id, 'ModulForm');"
+            "label": "Get Lowest Marketprices 2h",
+            "onClick": "aWATTar_GetLowestMarketprices($id, 'ModulForm', 2, false);"
         },
         {
             "type": "Button",
-            "label": "Create LowPrice_4 ",
-            "onClick": "aWATTar_LowPrice_4h($id, 'ModulForm');"
+            "label": "Get Lowest Marketprices 3h zusammenhängende Stunden",
+            "onClick": "aWATTar_GetLowestMarketprices($id, 'ModulForm', 3, true);"
         },
-        {
-            "type": "Button",
-            "label": "Create LowPrice_5 ",
-            "onClick": "aWATTar_LowPrice_5h($id, 'ModulForm');"
-        },
+
         {
             "type": "Button",
             "caption": "Reset Counter Variables",
             "onClick": "aWATTar_ResetCounterVariables($id, 'ModulForm');"
-        }        
+        },
+        {
+            "type": "Button",
+            "caption": "Buffer Debug Infos",
+            "onClick": "aWATTar_BufferDebugInfos($id, 'ModulForm');"
+        }            
     ],
     "status": [
         {

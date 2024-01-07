@@ -23,50 +23,77 @@ trait AWATTAR_FUNCTIONS {
         ];
 
         $apiURL = 'https://api.awattar.at/v1/marketdata?' . http_build_query($params);
+        $ch = curl_init($apiURL);
 
-        if ($this->logLevel >= LogLevel::DEBUG) {
-            $this->AddLog(__FUNCTION__, $apiURL);
+  
+        $httpResponse = false;
+        try{
+
+            curl_setopt_array($ch, $curlOptions);
+            $httpResponse = curl_exec($ch);
+            if ($httpResponse === false) {
+                $errorMsg = sprintf('{ "ERROR" : "curl_exec > %s [%s] {%s}" }', curl_error($ch), curl_errno($ch), $apiURL);  
+                $this->HandleError(__FUNCTION__, $errorMsg);
+                $httpResponse = false;
+            } 
+
+            $httpStatusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            if ($httpStatusCode >= 400) {
+                $errorMsg = sprintf('{ "ERROR" : "httpStatusCode >%s< [%s]" }', $httpStatusCode, $apiURL);
+                $this->HandleError(__FUNCTION__, $errorMsg);
+                $httpResponse = false;
+
+            } else if($httpStatusCode != 200) {
+                $msg = sprintf('{ "WARN" : "httpStatusCode >%s< [%s]" }', $httpStatusCode, $apiURL);
+                if ($this->logLevel >= LogLevel::WARN) {
+                    $this->AddLog(__FUNCTION__, $msg);
+                }                
+            }
+
+            if ($this->logLevel >= LogLevel::COMMUNICATION) {
+                $this->AddLog(__FUNCTION__, sprintf("OK > httpStatusCode '%s' < %s ", $httpStatusCode, $apiURL));
+            }
+
+    	} catch(Exception $e) {
+            $errorMsg = sprintf('{ "ERROR" : "Exception > %s [%s] {%s}" }', $e->getMessage(), $e->getCode(), $apiURL);
+            $this->HandleError(__FUNCTION__, $errorMsg);
+            $httpResponse = false;
+		} finally {
+            curl_close($ch);
         }
 
-        $ch = curl_init($apiURL);
-        curl_setopt_array($ch, $curlOptions);
-        $response = json_decode(curl_exec($ch), true);
-        curl_close($ch);
+        $jsonResponse = json_decode($httpResponse, true);
 
-
-        if ($response && json_last_error() == JSON_ERROR_NONE) {
+        if ($httpResponse && json_last_error() == JSON_ERROR_NONE) {
             $this->SetStatus(102);
-
-            $next_timer = strtotime(date('Y-m-d H:00:10', strtotime('+1 hour')));
-            //$this->SetTimerInterval('UpdateData', ($next_timer - time()) * 1000); // every hour
-            return isset($response['data']) ? $response['data'] : [];
+            return isset($jsonResponse['data']) ? $jsonResponse['data'] : false;
         } else {
             $this->SetStatus(200);
-            //$this->SetTimerInterval('UpdateData', 0); // disable timer
             return false;
         }
     }
 
 
-    private function ProcessMarketdata(array $jsonMarketdata) {
+    private function CreateMarketdataExtended(array $jsonMarketdata) {
 
         $epexSpotPriceArr = [];
 
-        $this->marketdataExtended = [
-            '_Timestamp' => time(),
-            '_LowestPrice' => 999999999999,
-            '_HighestPrice' => 0,
-            '_AveragePrice' => 0,
-            '_CurrentPrice' => 0,
-            '_Entries' => 0,
+        $marketdataExt = [
+            'CurrentPrice' => 0,
+            'AveragePrice' => 0,
+            'LowestPrice' => 999999999999,
+            'HighestPrice' => 0,
+            'Entries' => 0,
+            'FirstStartHourTS' => mktime(0, 0, 0, 1, 1, 2038),
+            'LastStartHourTS' => 0,
+            'FirstStartHour' => '-',
+            'LastStartHour' => '-',            
+            'Timestamp' => time(),
             'MarketdataArr' => []
         ];
 
 
-        $marketdataArr = [];
-
         foreach ($jsonMarketdata as $item) {
-
             
             $start = $item['start_timestamp'] / 1000;
             $end = $item['end_timestamp'] / 1000;
@@ -80,33 +107,53 @@ trait AWATTAR_FUNCTIONS {
                 $hour_end = 24;
             }
 
-            $key = 'EPEXSpot_' . $hour_start . '_' . $hour_end . 'h';
 
-            $marketdataArr[$key]['EPEXSpot'] = $epexSpotPrice;
-            $marketdataArr[$key]['start'] = $start;
-            $marketdataArr[$key]['end'] = $end;
+            $marketdataArrElem = [];
+            $marketdataArrElem['key'] =  'EPEXSpot_' . $hour_start . '_' . $hour_end . 'h';
+            $marketdataArrElem['EPEXSpot'] = $epexSpotPrice;
+            $marketdataArrElem['start'] = $start;
+            $marketdataArrElem['end'] = $end;
+            $marketdataArrElem['startDateTime'] = $this->UnixTimestamp2String($start);
+            $marketdataExt['MarketdataArr'][idate('G', $start)] =  $marketdataArrElem;
 
 
             if ($hour_start == date('G')) {
-                $this->marketdataExtended['_CurrentPrice'] = $epexSpotPrice;
+                $marketdataExt['CurrentPrice'] = $epexSpotPrice;
             } 
 
-            if ($epexSpotPrice < $this->marketdataExtended['_LowestPrice']) {
-                $this->marketdataExtended['_LowestPrice'] = $epexSpotPrice;
+            if ($epexSpotPrice < $marketdataExt['LowestPrice']) {
+                $marketdataExt['LowestPrice'] = $epexSpotPrice;
             }   
             
-            if ($epexSpotPrice > $this->marketdataExtended['_HighestPrice']) {
-                $this->marketdataExtended['_HighestPrice'] = $epexSpotPrice;
+            if ($epexSpotPrice > $marketdataExt['HighestPrice']) {
+                $marketdataExt['HighestPrice'] = $epexSpotPrice;
             }            
+
+            if ($start < $marketdataExt['FirstStartHourTS']) {
+                $marketdataExt['FirstStartHourTS'] = $start;
+            }  
+
+            if ($start > $marketdataExt['LastStartHourTS']) {
+                $marketdataExt['LastStartHourTS'] = $start;
+            }              
 
         }
 
         $cnt = count($epexSpotPriceArr);
-        $this->marketdataExtended['_Entries'] = $cnt;
-        $this->marketdataExtended['_AveragePrice'] = (float)round(array_sum($epexSpotPriceArr) / $cnt, 4);
+        $marketdataExt['Entries'] = $cnt;
+        $marketdataExt['AveragePrice'] = (float)round(array_sum($epexSpotPriceArr) / $cnt, 4);
+        $marketdataExt['FirstStartHour'] = $this->UnixTimestamp2String($marketdataExt['FirstStartHourTS']);
+        $marketdataExt['LastStartHour'] = $this->UnixTimestamp2String($marketdataExt['LastStartHourTS']);
 
-        $this->marketdataExtended['MarketdataArr'] =  $marketdataArr;
 
+        $this->marketdataExtended = $marketdataExt;
+
+        return true;
+
+        $marketdataArrTemp =  $this->marketdataExtended['MarketdataArr'];
+        $col = array_column($marketdataArrTemp, "EPEXSpot" );
+        array_multisort( $col, SORT_ASC, $marketdataArrTemp);
+        //var_dump($marketdataArrTemp);
 
     }
 
