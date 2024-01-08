@@ -340,7 +340,7 @@ class aWATTar extends IPSModule {
 				} else {
 
 					//Create Actionscript and Variable for PriceBasedSwitchMode
-					$filePath = __DIR__."\actionSkript_PriceMode.ips.php";
+					$filePath = __DIR__."/actionSkript_PriceMode.ips.php";
 					IPS_LogMessage(__FUNCTION__, $filePath);
 					$actionSkriptPriceMode_Inhalt = $this->LoadFileContents($filePath);
 					$actionSkriptPriceMode_ObjId = $this->RegisterScript(self::IDENT_ActionSkript_PriceMode, self::IDENT_ActionSkript_PriceMode, $actionSkriptPriceMode_Inhalt, 990);		
@@ -354,7 +354,7 @@ class aWATTar extends IPSModule {
 		
 					
 					//Create ActionscriptDefault
-					$actionSkriptDefault_Inhalt = $this->LoadFileContents(__DIR__."\actionSkript_Default.ips.php");
+					$actionSkriptDefault_Inhalt = $this->LoadFileContents(__DIR__."/actionSkript_Default.ips.php");
 					$actionSkriptDefault_ObjId = $this->RegisterScript(self::IDENT_ActionSkript_Default, self::IDENT_ActionSkript_Default, $actionSkriptDefault_Inhalt, 990);		
 					IPS_SetHidden($actionSkriptDefault_ObjId, true);
 					IPS_SetDisabled($actionSkriptDefault_ObjId, true);
