@@ -37,7 +37,7 @@ trait COMMON_FUNCTIONS {
 
 
 
-    protected function GetCategoryByIdent($identName, $categoryName, $parentId, $position = 0, $iocon = "") {
+    protected function CreateCategoryByIdent($identName, $categoryName, $parentId, $position = 0, $iocon = "") {
 
         $identName = $this->GetValidIdent($identName);
         $categoryId = @IPS_GetObjectIDByIdent($identName, $parentId);
@@ -58,12 +58,17 @@ trait COMMON_FUNCTIONS {
             if (!empty($icon)) {
                 IPS_SetIcon($categoryId, $icon);
             }
+        } else {
+            if ($this->logLevel >= LogLevel::TRACE) {
+                $this->AddLog(__FUNCTION__, sprintf("IPS-Category exists:: Name: %s | Ident: %s | ParentId: %s", $categoryName, $identName, $parentId)
+                );
+            }
         }
         return $categoryId;
     }
 
 
-    protected function GetDummyModuleByIdent($identName, $instanceName, $parentId, $position = 0, $icon = "") {
+    protected function CreateDummyInstanceByIdent($identName, $instanceName, $parentId, $position = 0, $icon = "") {
 
         $identName = $this->GetValidIdent($identName);
         $instanceId = @IPS_GetObjectIDByIdent($identName, $parentId);
@@ -72,7 +77,7 @@ trait COMMON_FUNCTIONS {
             if ($this->logLevel >= LogLevel::TRACE) {
                 $this->AddLog(
                     __FUNCTION__,
-                    sprintf("Create Dummy-Module :: Name: %s | Ident: %s | ParentId: %s", $instanceName, $identName, $parentId)
+                    sprintf("Create IPS-DummyInstance :: Name: %s | Ident: %s | ParentId: %s", $instanceName, $identName, $parentId)
                 );
             }
 
@@ -84,12 +89,17 @@ trait COMMON_FUNCTIONS {
             if (!empty($icon)) {
                 IPS_SetIcon($instanceId, $icon);
             }
+        } else {
+            if ($this->logLevel >= LogLevel::TRACE) {
+                $this->AddLog(__FUNCTION__, sprintf("IPS-DummyInstance exists:: Name: %s | Ident: %s | ParentId: %s", $instanceName, $identName, $parentId)
+                );
+            }
         }
         return $instanceId;
     }
 
 
-    protected function SetVariableByIdent($value, $identName, $varName, $parentId, $varType = 3, $position = 0, $varProfile = "", $icon = "", $forceUpdate=false, $round = null, $faktor = 1) {
+    protected function SetVariableByIdent($value, $identName, $varName, $parentId, $varType = 3, $position = 0, $varProfile = "", $icon = "", $forceUpdate = false, $round = null, $faktor = 1) {
 
         $variable_created = false;
         $identName = $this->GetValidIdent($identName);
@@ -100,7 +110,7 @@ trait COMMON_FUNCTIONS {
             }
 
             if ($this->logLevel >= LogLevel::TRACE) {
-                $this->AddLog( __FUNCTION__, sprintf("Create IPS-Variable :: Type: %d | Ident: %s | Profile: %s | Name: %s", $varType, $identName, $varProfile, $varName));
+                $this->AddLog(__FUNCTION__, sprintf("Create IPS-Variable :: Type: %d | Ident: %s | Profile: %s | Name: %s", $varType, $identName, $varProfile, $varName));
             }
             $varId = IPS_CreateVariable($varType);
             $variable_created = true;
@@ -181,7 +191,6 @@ trait COMMON_FUNCTIONS {
         return date('d.m.Y H:i:s', $timestamp);
     }
 
-
     protected function String2Hex($string) {
         $hex = '';
         for ($i = 0; $i < strlen($string); $i++) {
@@ -190,6 +199,11 @@ trait COMMON_FUNCTIONS {
         return trim($hex);
     }
 
+
+    protected function LoadFileContents($fileName) {
+        if($this->logLevel >= LogLevel::DEBUG) { $this->AddLog(__FUNCTION__, sprintf("Load File Content form '%s'", $fileName)); }	
+        return file_get_contents($fileName);
+    }
 
     protected function CalcDuration_ms(float $timeStart) {
         $duration =  microtime(true) - $timeStart;

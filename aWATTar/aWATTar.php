@@ -7,7 +7,8 @@ trait AWATTAR_FUNCTIONS {
     private function RequestMarketdata() {
         // build params
         $params = [
-            'start' => strtotime(date('d.m.Y 00:00:00')) * 1000
+            'start' => strtotime(date('d.m.Y 00:00:00')) * 1000,
+            'end' => (time() + 3600*24) * 1000
         ];
 
         // curl options
@@ -23,26 +24,26 @@ trait AWATTAR_FUNCTIONS {
         ];
 
         $apiURL = 'https://api.awattar.at/v1/marketdata?' . http_build_query($params);
+        //$apiURL = 'https://api.awattar.at/v1/marketdata';
         $ch = curl_init($apiURL);
 
   
         $httpResponse = false;
-        try{
-
+        $startTime =  microtime(true);
+        try {
             curl_setopt_array($ch, $curlOptions);
             $httpResponse = curl_exec($ch);
             if ($httpResponse === false) {
+                $httpResponse = false;
                 $errorMsg = sprintf('{ "ERROR" : "curl_exec > %s [%s] {%s}" }', curl_error($ch), curl_errno($ch), $apiURL);  
                 $this->HandleError(__FUNCTION__, $errorMsg);
-                $httpResponse = false;
             } 
 
             $httpStatusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             if ($httpStatusCode >= 400) {
+                $httpResponse = false;
                 $errorMsg = sprintf('{ "ERROR" : "httpStatusCode >%s< [%s]" }', $httpStatusCode, $apiURL);
                 $this->HandleError(__FUNCTION__, $errorMsg);
-                $httpResponse = false;
-
             } else if($httpStatusCode != 200) {
                 $msg = sprintf('{ "WARN" : "httpStatusCode >%s< [%s]" }', $httpStatusCode, $apiURL);
                 if ($this->logLevel >= LogLevel::WARN) {
@@ -55,22 +56,32 @@ trait AWATTAR_FUNCTIONS {
             }
 
     	} catch(Exception $e) {
+            $httpResponse = false;
             $errorMsg = sprintf('{ "ERROR" : "Exception > %s [%s] {%s}" }', $e->getMessage(), $e->getCode(), $apiURL);
             $this->HandleError(__FUNCTION__, $errorMsg);
-            $httpResponse = false;
 		} finally {
             curl_close($ch);
+            if ($this->logLevel >= LogLevel::COMMUNICATION) {
+                $duration = $this->CalcDuration_ms($startTime);
+                $this->AddLog(__FUNCTION__, sprintf("CURL Connection closed [Duration: %.2f ms]", $duration));
+            }            
         }
 
-        $jsonResponse = json_decode($httpResponse, true);
+        if($httpResponse !== false) {
+            $jsonResponse = json_decode($httpResponse, true);
 
-        if ($httpResponse && json_last_error() == JSON_ERROR_NONE) {
-            $this->SetStatus(102);
-            return isset($jsonResponse['data']) ? $jsonResponse['data'] : false;
+            if (json_last_error() == JSON_ERROR_NONE) {
+                $this->SetStatus(102);
+                return isset($jsonResponse['data']) ? $jsonResponse['data'] : false;
+            } else {
+                $this->SetStatus(200);
+                return false;
+            }
         } else {
             $this->SetStatus(200);
             return false;
         }
+        
     }
 
 
@@ -84,10 +95,8 @@ trait AWATTAR_FUNCTIONS {
             'LowestPrice' => 999999999999,
             'HighestPrice' => 0,
             'Entries' => 0,
-            'FirstStartHourTS' => mktime(0, 0, 0, 1, 1, 2038),
-            'LastStartHourTS' => 0,
-            'FirstStartHour' => '-',
-            'LastStartHour' => '-',            
+            'FirstStartHour' => mktime(0, 0, 0, 1, 1, 2038),
+            'LastStartHour' => 0,     
             'Timestamp' => time(),
             'MarketdataArr' => []
         ];
@@ -129,12 +138,12 @@ trait AWATTAR_FUNCTIONS {
                 $marketdataExt['HighestPrice'] = $epexSpotPrice;
             }            
 
-            if ($start < $marketdataExt['FirstStartHourTS']) {
-                $marketdataExt['FirstStartHourTS'] = $start;
+            if ($start < $marketdataExt['FirstStartHour']) {
+                $marketdataExt['FirstStartHour'] = $start;
             }  
 
-            if ($start > $marketdataExt['LastStartHourTS']) {
-                $marketdataExt['LastStartHourTS'] = $start;
+            if ($start > $marketdataExt['LastStartHour']) {
+                $marketdataExt['LastStartHour'] = $start;
             }              
 
         }
@@ -142,9 +151,6 @@ trait AWATTAR_FUNCTIONS {
         $cnt = count($epexSpotPriceArr);
         $marketdataExt['Entries'] = $cnt;
         $marketdataExt['AveragePrice'] = (float)round(array_sum($epexSpotPriceArr) / $cnt, 4);
-        $marketdataExt['FirstStartHour'] = $this->UnixTimestamp2String($marketdataExt['FirstStartHourTS']);
-        $marketdataExt['LastStartHour'] = $this->UnixTimestamp2String($marketdataExt['LastStartHourTS']);
-
 
         $this->marketdataExtended = $marketdataExt;
 

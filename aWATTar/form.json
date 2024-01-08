@@ -6,6 +6,20 @@
             "caption": "Auto Update"
         },
         {
+            "name": "priceBasedSwitches",
+            "type": "NumberSpinner",
+            "caption": "Erstelle Preisbasierte Schalter",
+            "suffix": "",
+            "minimum": 0,
+            "maximum": 5
+        },
+        {
+            "type": "CheckBox",
+            "caption": "Berechne Brutto Preise",
+            "enabled": false,
+            "name": "cb_CalcBruttoPreise"
+        },
+        {
             "name": "LogLevel",
             "type": "Select",
             "caption": "Debug/Log Level",
@@ -51,12 +65,7 @@
                     "value": 0
                 }
             ]
-        },
-        {
-            "type": "CheckBox",
-            "caption": "Berechne Brutto Preise",
-            "name": "cb_CalcBruttoPreise"
-        }
+        }      
     ],
     "actions": [
         {
@@ -64,29 +73,6 @@
             "label": "Update Marketdata",
             "onClick": "aWATTar_UpdateMarketdata($id, 'ModulForm');"
         },
-
-        {
-            "type": "Button",
-            "label": "Get Marketprices LowerThan 11.6 | 3h | true",
-            "onClick": "aWATTar_GetMarketpricesLowerThan($id, 'ModulForm', 11.6, 3, true);"
-        },
-        {
-            "type": "Button",
-            "label": "Get Marketprices LowerThan 12.8 | 6h | false",
-            "onClick": "aWATTar_GetMarketpricesLowerThan($id, 'ModulForm', 12.9, 6, false);"
-        },
-
-        {
-            "type": "Button",
-            "label": "Get Lowest Marketprices 2h",
-            "onClick": "aWATTar_GetLowestMarketprices($id, 'ModulForm', 2, false);"
-        },
-        {
-            "type": "Button",
-            "label": "Get Lowest Marketprices 3h zusammenhängende Stunden",
-            "onClick": "aWATTar_GetLowestMarketprices($id, 'ModulForm', 3, true);"
-        },
-
         {
             "type": "Button",
             "caption": "Reset Counter Variables",
@@ -96,7 +82,7 @@
             "type": "Button",
             "caption": "Buffer Debug Infos",
             "onClick": "aWATTar_BufferDebugInfos($id, 'ModulForm');"
-        }            
+        }
     ],
     "status": [
         {
