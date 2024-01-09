@@ -75,6 +75,16 @@
         },
         {
             "type": "Button",
+            "label": "Update Preisbasierte Schalter 1",
+            "onClick": "aWATTar_UpdatePriceBasedSwitches($id, 'ModulForm', false);"
+        },  
+        {
+            "type": "Button",
+            "label": "Update Preisbasierte Schalter 2",
+            "onClick": "aWATTar_UpdatePriceBasedSwitches($id, 'ModulForm', true);"
+        },                
+        {
+            "type": "Button",
             "caption": "Reset Counter Variables",
             "onClick": "aWATTar_ResetCounterVariables($id, 'ModulForm');"
         },
