@@ -37,8 +37,7 @@ switch($ipsValue) {
         //IPS_SetHidden($varId_switch, false);
         IPS_SetDisabled($varId_wochenplan, true);
         IPS_SetHidden($varId_wochenplan, true);  
-        IPS_SetEventActive($varId_wochenplan, false);  
-        //IPS_SetEventScheduleGroup($varId_wochenplan, 0, 0);             
+        IPS_SetEventActive($varId_wochenplan, false);            
         IPS_SetDisabled($varId_data, false);
         IPS_SetHidden($varId_data, false);    
         SetValueBoolean($varId_switch, false);                            
@@ -59,8 +58,7 @@ switch($ipsValue) {
         //IPS_SetHidden($varId_switch, false);
         IPS_SetDisabled($varId_wochenplan, true);
         IPS_SetHidden($varId_wochenplan, true); 
-        IPS_SetEventActive($varId_wochenplan, false);   
-        //IPS_SetEventScheduleGroup($varId_wochenplan, 0, 0);                                    
+        IPS_SetEventActive($varId_wochenplan, false);                                    
         IPS_SetDisabled($varId_data, false);
         IPS_SetHidden($varId_data, false);    
         SetValueBoolean($varId_switch, true);                            
@@ -82,7 +80,6 @@ switch($ipsValue) {
         IPS_SetDisabled($varId_wochenplan, false);
         IPS_SetHidden($varId_wochenplan, false);   
         IPS_SetEventActive($varId_wochenplan, false);  
-        //IPS_SetEventScheduleGroup($varId_wochenplan, 0, 0);                       
         IPS_SetDisabled($varId_data, false);
         IPS_SetHidden($varId_data, false);    
         SetValueBoolean($varId_switch, false);                            
@@ -99,12 +96,11 @@ switch($ipsValue) {
         IPS_SetHidden($varId_continuousHours, false);
         IPS_SetDisabled($varId_threshold, true);
         IPS_SetHidden($varId_threshold, true);
-        IPS_SetDisabled($varId_switch, false);
-        IPS_SetHidden($varId_switch, false);
+        //IPS_SetDisabled($varId_switch, false);
+        //IPS_SetHidden($varId_switch, false);
         IPS_SetDisabled($varId_wochenplan, false);
         IPS_SetHidden($varId_wochenplan, false);         
         IPS_SetEventActive($varId_wochenplan, false);  
-        //IPS_SetEventScheduleGroup($varId_wochenplan, 0, 0);                 
         IPS_SetDisabled($varId_data, false);
         IPS_SetHidden($varId_data, false);    
         SetValueBoolean($varId_switch, false);                            

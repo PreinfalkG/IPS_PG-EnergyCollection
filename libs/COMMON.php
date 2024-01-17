@@ -37,7 +37,7 @@ trait COMMON_FUNCTIONS {
 
 
 
-    protected function CreateCategoryByIdent($identName, $categoryName, $parentId, $position = 0, $iocon = "") {
+    protected function CreateCategoryByIdent($identName, $categoryName, $parentId, $position = 0, $icon = "") {
 
         $identName = $this->GetValidIdent($identName);
         $categoryId = @IPS_GetObjectIDByIdent($identName, $parentId);
@@ -162,7 +162,7 @@ trait COMMON_FUNCTIONS {
             $eventScheduleGroupID = $eventScheduleGroup["ID"];
             IPS_SetEventScheduleGroup($varId_wochenplan, $eventScheduleGroupID, 0);  
             if ($this->logLevel >= LogLevel::TRACE) {
-                $this->AddLog(__FUNCTION__, sprintf("EventScheduleGroupID '%s' im Wochenplan '%s' wurde zurückgesetzt", $eventScheduleGroupID, $varId_wochenplan));
+                $this->AddLog(__FUNCTION__, sprintf("EventScheduleGroupID '%s' im Wochenplan '%s' wurde zurückgesetzt {%s}", $eventScheduleGroupID, $varId_wochenplan, print_r($eventScheduleGroup, true)));
             }
         }
 
