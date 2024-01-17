@@ -150,6 +150,24 @@ trait COMMON_FUNCTIONS {
         }
     }
 
+
+    protected function ResetWochenplan($varId_wochenplan) {
+
+        //IPS_SetEventScheduleGroup($varId_wochenplan, 0, 0);
+        //IPS_SetEventScheduleGroup($varId_wochenplan, 0, 127); //Mo - So (1 + 2 + 4 + 8 + 16 + 32 + 64)
+        
+        $event = IPS_GetEvent($varId_wochenplan);
+        $eventScheduleGroups = $event["ScheduleGroups"];
+        foreach($eventScheduleGroups as $eventScheduleGroup) {
+            $eventScheduleGroupID = $eventScheduleGroup["ID"];
+            IPS_SetEventScheduleGroup($varId_wochenplan, $eventScheduleGroupID, 0);  
+            if ($this->logLevel >= LogLevel::TRACE) {
+                $this->AddLog(__FUNCTION__, sprintf("EventScheduleGroupID '%s' im Wochenplan '%s' wurde zurückgesetzt", $eventScheduleGroupID, $varId_wochenplan));
+            }
+        }
+
+    }
+
     protected function GetValidIdent($ident) {
 
         $ident = strtr($ident, [

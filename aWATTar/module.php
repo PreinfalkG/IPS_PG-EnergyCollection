@@ -146,33 +146,30 @@ class aWATTar extends IPSModule {
 			}
 
 			$varId_mode = IPS_GetObjectIDByIdent("_mode", $priceSwitchRoodId);
-			$varId_duration = IPS_GetObjectIDByIdent("_duration", $priceSwitchRoodId);
-			$varId_continuousHours = IPS_GetObjectIDByIdent("_continuousHours", $priceSwitchRoodId);
-			$varId_threshold = IPS_GetObjectIDByIdent("_threshold", $priceSwitchRoodId);
 			$varId_switch = IPS_GetObjectIDByIdent("_switch", $priceSwitchRoodId);
+			$varId_wochenplan = IPS_GetObjectIDByIdent("_wochenplan", $varId_switch);
 			$varId_data = IPS_GetObjectIDByIdent("_data", $priceSwitchRoodId);
 
 			$priceMode = GetValueInteger($varId_mode);
-			$duration = GetValueInteger($varId_duration);
-			$continuousHours = GetValueBoolean($varId_continuousHours);
-			$threshold = GetValueFloat($varId_threshold);
-
+	
 			switch($priceMode) {
 				case 0:
+					$this->ResetWochenplan($varId_wochenplan);					
                     SetValueBoolean($varId_switch, false);
 					SetValue($varId_data, "Der Virtuelle Schalter ist immer AUS");
 					break;
 				case 1:
+					$this->ResetWochenplan($varId_wochenplan);
 					SetValueBoolean($varId_switch, true);                       
 					SetValue($varId_data, "Der Virtuelle Schalter ist immer EIN");    
 					break;
 				case 2:
-					$hoursBelowThresholdArr = $this->GetHoursBelowThreshold($threshold, $duration, $continuousHours);
-					SetValue($varId_data, json_encode($hoursBelowThresholdArr));        
+					SetValue($varId_data, "-");
+					$hoursBelowThresholdArr = $this->SetHoursBelowThreshold($priceSwitchRoodId);
 					break;
 				case 3:
-					$lowestContinuousHours = $this->GetLowestContinuousHours($threshold, $duration);
-					SetValue($varId_data, json_encode($lowestContinuousHours));        
+					SetValue($varId_data, "-");
+					$lowestContinuousHours = $this->SetHoursWithLowestPrice($priceSwitchRoodId);
 					break;
 				default:
 					break;
@@ -353,12 +350,13 @@ class aWATTar extends IPSModule {
 		//$this->RegisterVariableInteger("modbusReceiveLast", "Modbus Last Receive", "~UnixTimestamp", 901);
 		//$this->RegisterVariableInteger("modbusTransmitCnt", "Modbus Transmit Cnt", "", 910);
 
+
 		$priceBasedSwitches = $this->ReadPropertyInteger("priceBasedSwitches");
 		for($i=1; $i <= 5; $i++) {
 			$identName = sprintf("%s_%s", self::DUMMY_IDENT_PriceBasedSwitch, $i);
 			if($i <= $priceBasedSwitches ) {
 				$instanceName = sprintf("Preisbasierter Schalter #%s", $i);
-				$position = 200 + $i;
+				$position = 200 + ($i*10);
 				//$categoryId = $this->CreateCategoryByIdent($identName, $instanceName, $this->InstanceID, $position, $iocon = "");	
 				$dummyId = $this->CreateDummyInstanceByIdent($identName, $instanceName, $this->InstanceID, $position, "Euro");
 				if($dummyId === false) {
@@ -369,40 +367,63 @@ class aWATTar extends IPSModule {
 					$filePath = __DIR__."/actionSkript_PriceMode.ips.php";
 					//IPS_LogMessage(__FUNCTION__, $filePath);
 					$actionSkriptPriceMode_Inhalt = $this->LoadFileContents($filePath);
+					$actionSkriptPriceMode_Inhalt = str_replace("%%INSTANZ_ID%%", strval($this->InstanceID) , $actionSkriptPriceMode_Inhalt);
 					$actionSkriptPriceMode_ObjId = $this->RegisterScript(self::IDENT_ActionSkript_PriceMode, self::IDENT_ActionSkript_PriceMode, $actionSkriptPriceMode_Inhalt, 990);		
 					IPS_SetHidden($actionSkriptPriceMode_ObjId, true);
 					IPS_SetDisabled($actionSkriptPriceMode_ObjId, true);
 					if($this->logLevel >= LogLevel::TRACE) { $this->AddLog(__FUNCTION__, sprintf("ActionSkrip '%s' Registered: %s", self::IDENT_ActionSkript_PriceMode, $actionSkriptPriceMode_ObjId)); }	
 			
-					$varIdMode = $this->SetVariableByIdent(0, "_mode", "Mode", $dummyId, VARIABLE::TYPE_INTEGER, $position = 10, "aWATTar.PriceBasedSwitch.Mode", "");
+					$varIdMode = $this->SetVariableByIdent(0, "_mode", "Mode", $dummyId, VARIABLE::TYPE_INTEGER, $position++, "aWATTar.PriceBasedSwitch.Mode", "");
 					IPS_SetIcon($varIdMode, "EnergyProduction");
 					IPS_SetVariableCustomAction($varIdMode, $actionSkriptPriceMode_ObjId);
 		
 					
 					//Create ActionscriptDefault
 					$actionSkriptDefault_Inhalt = $this->LoadFileContents(__DIR__."/actionSkript_Default.ips.php");
+					$actionSkriptDefault_Inhalt = str_replace("%%INSTANZ_ID%%", strval($this->InstanceID) , $actionSkriptDefault_Inhalt);
 					$actionSkriptDefault_ObjId = $this->RegisterScript(self::IDENT_ActionSkript_Default, self::IDENT_ActionSkript_Default, $actionSkriptDefault_Inhalt, 990);		
 					IPS_SetHidden($actionSkriptDefault_ObjId, true);
 					IPS_SetDisabled($actionSkriptDefault_ObjId, true);
 					if($this->logLevel >= LogLevel::TRACE) { $this->AddLog(__FUNCTION__, sprintf("ActionSkrip '%s' Registered: %s", self::IDENT_ActionSkript_Default, $actionSkriptDefault_ObjId)); }	
-					
-					$varId = $this->SetVariableByIdent(7.6, "_threshold", "Wunschpreis", $dummyId, VARIABLE::TYPE_FLOAT, $position = 20, "aWATTar.threshold", "");
+
+
+					$varId = $this->SetVariableByIdent(7.6, "_threshold", "Wunschpreis", $dummyId, VARIABLE::TYPE_FLOAT, $position++, "aWATTar.threshold", "");
 					IPS_SetIcon($varId, "Graph");
 					IPS_SetVariableCustomAction($varId, $actionSkriptDefault_ObjId);
+
+					$varId = $this->SetVariableByIdent(-3600, "_timeWindowStart", "Zeitfenster VON [hh:mm]", $dummyId, VARIABLE::TYPE_INTEGER, $position++, "~UnixTimestampTime", "");
+					IPS_SetVariableCustomAction($varId, $actionSkriptDefault_ObjId);
+
+					$varId = $this->SetVariableByIdent(-3600, "_timeWindowEnd", "Zeitfenster BIS [hh:mm]", $dummyId, VARIABLE::TYPE_INTEGER, $position++, "~UnixTimestampTime", "");
+					IPS_SetVariableCustomAction($varId, $actionSkriptDefault_ObjId);			
 					
-					$varId = $this->SetVariableByIdent(7200, "_duration", "Dauer [hh:mm]", $dummyId, VARIABLE::TYPE_INTEGER, $position = 30, "~UnixTimestampTime", "");
+
+					$varId = $this->SetVariableByIdent(7200, "_duration", "Dauer [hh:mm]", $dummyId, VARIABLE::TYPE_INTEGER, $position++, "~UnixTimestampTime", "");
 					IPS_SetIcon($varId, "Hourglass");
 					IPS_SetVariableCustomAction($varId, $actionSkriptDefault_ObjId);
 					
-					$varId = $this->SetVariableByIdent(0, "_continuousHours", "zusammenhängende Stunden", $dummyId, VARIABLE::TYPE_BOOLEAN, $position = 40, "aWATTar.ContinuousHours", "");
+					$varId = $this->SetVariableByIdent(0, "_continuousHours", "zusammenhängende Stunden", $dummyId, VARIABLE::TYPE_BOOLEAN, $position++, "aWATTar.ContinuousHours", "");
 					IPS_SetIcon($varId, "Distance");	//"Transparent");
 					IPS_SetVariableCustomAction($varId, $actionSkriptDefault_ObjId);
 
-					$varId = $this->SetVariableByIdent(0, "_switch", "Virtueller Schalter", $dummyId, VARIABLE::TYPE_BOOLEAN, $position = 50, "aWATTar.priceBasedSwitch", "");
-					IPS_SetDisabled($varId, false);
+					$varIdSwitch = $this->SetVariableByIdent(0, "_switch", "Virtueller Schalter", $dummyId, VARIABLE::TYPE_BOOLEAN, $position++, "aWATTar.priceBasedSwitch", "");
+					IPS_SetDisabled($varIdSwitch, false);
 					//IPS_SetVariableCustomAction($varId, $actionSkriptDefault_ObjId);
 
-					$varId = $this->SetVariableByIdent(0, "_data", "Info", $dummyId, VARIABLE::TYPE_STRING, $position = 90, "~TextBox", "");
+					$eid = IPS_CreateEvent(2);		//Wochneplan
+					IPS_SetParent($eid, $varIdSwitch);
+					IPS_SetIdent($eid,"_wochenplan");
+					IPS_SetEventActive($eid, false);
+					//IPS_SetName($eid, "xx");
+					//IPS_SetPosition($eid, 10);
+					IPS_SetEventScheduleActionEx($eid, 0, "OFF", 0xC1C1C1, "{3644F802-C152-464A-868A-242C2A3DEC5C}", ["VALUE" => false]);	//0xEDEDED
+					IPS_SetEventScheduleActionEx($eid, 1, "ON", 0x00FF11, "{3644F802-C152-464A-868A-242C2A3DEC5C}", ["VALUE" => true]);
+					//IPS_SetEventScheduleGroup($eid, 0, 127); //Mo - So (1 + 2 + 4 + 8 + 16 + 32 + 64)
+					//IPS_SetEventScheduleGroupPoint ($eid, 0, 1, 0,  0,  0, 0);
+					//IPS_SetEventScheduleGroupPoint ($eid, 0, 2, 8, 10, 20, 1); 
+					//IPS_SetEventScheduleGroupPoint ($eid, 0, 3, 9,  0,  0, 0);
+
+					$varId = $this->SetVariableByIdent(0, "_data", "Info", $dummyId, VARIABLE::TYPE_STRING, $position++, "~TextBox", "");
 
 					RequestActionEx($varIdMode, 0, "Modul");
 				}
@@ -414,15 +435,27 @@ class aWATTar extends IPSModule {
 				if($dummyId !== false) {
 					$childrenIDs = IPS_GetChildrenIDs($dummyId);
 					foreach($childrenIDs as $childId) {
-						IPS_DeleteVariable($childId);
-						if ($this->logLevel >= LogLevel::DEBUG) {
-							$this->AddLog(__FUNCTION__, sprintf("Variable '%s' deleted", $childId));
+						if(IPS_HasChildren($childId)) {
+							$objId = IPS_GetChildrenIDs($childId)[0];
+							if(IPS_GetObject($objId)["ObjectType"] == 4) {
+								IPS_DeleteEvent($objId);
+							}
+						}
+
+						if(IPS_IsChild($childId, $this->InstanceID, true)) {
+							IPS_DeleteVariable($childId);
+							if ($this->logLevel >= LogLevel::DEBUG) {
+								$this->AddLog(__FUNCTION__, sprintf("Variable '%s' deleted", $childId));
+							}
 						}
 					}
-					IPS_DeleteInstance($dummyId);
-					if ($this->logLevel >= LogLevel::DEBUG) {
-						$this->AddLog(__FUNCTION__, sprintf("Dummy Instanz '%s' deleted", $identName));
-					}					
+					if(IPS_IsChild($dummyId, $this->InstanceID, true)) {
+						IPS_DeleteInstance($dummyId);
+						if ($this->logLevel >= LogLevel::DEBUG) {
+							
+							$this->AddLog(__FUNCTION__, sprintf("Dummy Instanz '%s' deleted", $identName));
+						}	
+					}				
 				} else {
 					if ($this->logLevel >= LogLevel::DEBUG) {
 						$this->AddLog(__FUNCTION__, sprintf("Dummy Instanz '%s' does not exist", $identName));

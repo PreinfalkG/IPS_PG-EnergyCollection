@@ -186,29 +186,50 @@ trait AWATTAR_FUNCTIONS {
 	}
 
 
-    protected function GetHoursBelowThreshold(float $threshold, int $duration, bool $continuousHours) {
+    protected function SetHoursBelowThreshold(int $priceSwitchRoodId) {
         
         $hoursBelowThresholdArr = [];
+        $switchOnInfo = "OnHours: ";
+
+        $varId_mode = IPS_GetObjectIDByIdent("_mode", $priceSwitchRoodId);
+        $varId_threshold = IPS_GetObjectIDByIdent("_threshold", $priceSwitchRoodId);           
+        $varId_timeWindowStart = IPS_GetObjectIDByIdent("_timeWindowStart", $priceSwitchRoodId);
+        $varId_timeWindowEnd = IPS_GetObjectIDByIdent("_timeWindowEnd", $priceSwitchRoodId);
+        $varId_duration = IPS_GetObjectIDByIdent("_duration", $priceSwitchRoodId);            
+        $varId_continuousHours = IPS_GetObjectIDByIdent("_continuousHours", $priceSwitchRoodId);	
+        $varId_switch = IPS_GetObjectIDByIdent("_switch", $priceSwitchRoodId);
+        $varId_wochenplan = IPS_GetObjectIDByIdent("_wochenplan", $varId_switch);            
+        $varId_data = IPS_GetObjectIDByIdent("_data", $priceSwitchRoodId);
+
+        $priceMode = GetValueInteger($varId_mode);
+        $threshold = GetValueFloat($varId_threshold);
+        $timeWindowStart = GetValueInteger($varId_timeWindowStart);
+        $timeWindowEnd = GetValueInteger($varId_timeWindowEnd);
+        $duration = GetValueInteger($varId_duration);
+        $continuousHours = GetValueBoolean($varId_continuousHours);
+        $switch = GetValueBoolean($varId_switch);
 
         $durationHours = idate('G', $duration);
 
-        if ($this->logLevel >= LogLevel::TRACE) {
-            $this->AddLog(__FUNCTION__, sprintf("duration %s | %s hours", print_r($duration, true), $durationHours));
+        $startTS = strtotime('midnight') + $timeWindowStart + 3600;
+        $endTS = strtotime(date("Y-m-d 0:0:0")) + $timeWindowEnd + 3600;
+        if($timeWindowEnd <= $timeWindowStart) {
+            $endTS = $endTS + 3600*24;
         }
 
-        $marketdataArrFromNow = $this->GetMarketdataArr(true);
-        if($marketdataArrFromNow !== false) {
+        if ($this->logLevel >= LogLevel::TRACE) {
+            $this->AddLog(__FUNCTION__, sprintf("StartWindow: %s {%s} | EndWindow: %s {%s} | duration %s | %s hours", $this->UnixTimestamp2String($startTS), $timeWindowStart, $this->UnixTimestamp2String($endTS), $timeWindowEnd, print_r($duration, true), $durationHours));
+        }
+
+        $marketdataArr = $this->GetMarketdataArr($startTS, $endTS, true);
+        if($marketdataArr !== false) {
 
             $itemCnt = 0;
-      
-            $col = array_column($marketdataArrFromNow, "EPEXSpot");
-            array_multisort($col, SORT_ASC, $marketdataArrFromNow);
+            $col = array_column($marketdataArr, "EPEXSpot");
+            array_multisort($col, SORT_ASC, $marketdataArr);
 
-            foreach ($marketdataArrFromNow as $item) {
-                $start = $item["start"];
-                $end = $item["end"];
+            foreach ($marketdataArr as $item) {
                 $EPEXSpot = $item["EPEXSpot"];
-               
                 if ($EPEXSpot <= $threshold) {
                     $itemCnt++;
                     $hoursBelowThresholdArr[] = $item;
@@ -218,19 +239,84 @@ trait AWATTAR_FUNCTIONS {
             if(count($hoursBelowThresholdArr) > 1) {
                 $col = array_column($hoursBelowThresholdArr, "start");
                 array_multisort($col, SORT_ASC, $hoursBelowThresholdArr);
-            }            
+            }   
+
+            IPS_SetEventActive($varId_wochenplan, false);
+            $this->ResetWochenplan($varId_wochenplan);
+            IPS_SetEventScheduleGroup($varId_wochenplan, 0, 127);
+
+            $SchaltpunktID = 0; 
+            $averagePrice= 0;
+            $count = count($hoursBelowThresholdArr);
+            for($i=0; $i < $count; $i++) {
+                $start = $hoursBelowThresholdArr[$i]["start"];
+                $end = $hoursBelowThresholdArr[$i]["end"];
+                $EPEXSpot = $hoursBelowThresholdArr[$i]["EPEXSpot"];
+
+                $SchaltpunktID++;
+                IPS_SetEventScheduleGroupPoint($varId_wochenplan, 0, $SchaltpunktID, idate('H', $start), idate('i', $start),  idate('s', $start), 1);
+                $averagePrice += $EPEXSpot;
+                $switchOnInfo .= sprintf("\r\n %s {%s ct/kwh}", date('d.m.y H:i', $start), $EPEXSpot);
+                if ($this->logLevel >= LogLevel::TRACE) {
+                    $this->AddLog(__FUNCTION__, sprintf(" [%d/%d] Start-POINT added: %s - %s ct/kWh", $i, $count, date('d.m.y H:i', $start), $EPEXSpot));  
+                }
+
+                $doAdddEndPoint = false;
+                if($i >= $count-1) { 
+                    $doAdddEndPoint = true; 
+                } else if($end != $hoursBelowThresholdArr[$i+1]["start"]) { 
+                    $doAdddEndPoint = true; 
+                }
+                if($doAdddEndPoint) {
+                    $SchaltpunktID++;
+                    IPS_SetEventScheduleGroupPoint($varId_wochenplan, 0, $SchaltpunktID, idate('H', $end), idate('i', $end),  idate('s', $end), 0);
+                    if ($this->logLevel >= LogLevel::TRACE) {
+                        //$this->AddLog(__FUNCTION__, sprintf(" [%d/%d] End-POINT added: %s - %s ct/kWh", $i, $count, date('d.m.y H:i', $end), $EPEXSpot));  
+                        $this->AddLog(__FUNCTION__, sprintf(" [%d/%d] End-POINT added: %s", $i, $count, date('d.m.y H:i', $end)));  
+                    }
+                }
+            }
+            if($count > 0) {
+                IPS_SetEventActive($varId_wochenplan, true);
+                $averagePrice = round($averagePrice / $count, 3);
+                $switchOnInfo .= sprintf("\r\n Durchschnitt der %s Stunden: %s ct/kwh", $count, $averagePrice);
+            } else {
+                $switchOnInfo = "KEINE Stunden mit den Vorgaben vorhanden!";
+            }
+
         } else {
             $hoursBelowThresholdArr = false;
         }
+        SetValue($varId_data, $switchOnInfo);
         return $hoursBelowThresholdArr;
     }
 
 
-    protected function GetLowestContinuousHours(float $threshold, int $duration) {
+    protected function SetHoursWithLowestPrice(int $priceSwitchRoodId) {
 
         $continuousHoursArr = [];
-
         $priceArrTEMP = [];
+
+        $varId_mode = IPS_GetObjectIDByIdent("_mode", $priceSwitchRoodId);
+        $varId_threshold = IPS_GetObjectIDByIdent("_threshold", $priceSwitchRoodId);           
+        $varId_timeWindowStart = IPS_GetObjectIDByIdent("_timeWindowStart", $priceSwitchRoodId);
+        $varId_timeWindowEnd = IPS_GetObjectIDByIdent("_timeWindowEnd", $priceSwitchRoodId);
+        $varId_duration = IPS_GetObjectIDByIdent("_duration", $priceSwitchRoodId);            
+        $varId_continuousHours = IPS_GetObjectIDByIdent("_continuousHours", $priceSwitchRoodId);	
+        $varId_switch = IPS_GetObjectIDByIdent("_switch", $priceSwitchRoodId);
+        $varId_wochenplan = IPS_GetObjectIDByIdent("_wochenplan", $varId_switch);            
+        $varId_data = IPS_GetObjectIDByIdent("_data", $priceSwitchRoodId);
+
+        $priceMode = GetValueInteger($varId_mode);
+        $threshold = GetValueFloat($varId_threshold);
+        $timeWindowStart = GetValueInteger($varId_timeWindowStart);
+        $timeWindowEnd = GetValueInteger($varId_timeWindowEnd);
+        $duration = GetValueInteger($varId_duration);
+        $continuousHours = GetValueBoolean($varId_continuousHours);
+        $switch = GetValueBoolean($varId_switch);
+
+        $this->ResetWochenplan($varId_wochenplan);
+
 
         $durationHours = idate('G', $duration);
 
@@ -238,7 +324,7 @@ trait AWATTAR_FUNCTIONS {
             $this->AddLog(__FUNCTION__, sprintf("duration %s | %s hours", print_r($duration, true), $durationHours));
         }
 
-        $marketdataArrFromNow = $this->GetMarketdataArr(true);
+        $marketdataArrFromNow = $this->GetMarketdataArr(0,0,true);
         $entries = count($marketdataArrFromNow);
         //$this->SendDebug(__FUNCTION__, sprintf("marketdataArrFromNow Entries: %s", $entries), 0);
         if($marketdataArrFromNow !== false) {
@@ -282,7 +368,7 @@ trait AWATTAR_FUNCTIONS {
         return $continuousHoursArr;
     }
 
-    protected function GetMarketdataArr(bool $futureHoursOnly) {
+    protected function GetMarketdataArr(int $startTS=0, int $endTS=0, bool $futureHoursOnly=false) {
 
         $marketdataArr = [];
         $dateTimeNow = time();
@@ -291,15 +377,36 @@ trait AWATTAR_FUNCTIONS {
         if (is_array($marketdataExtended)) {
             if (array_key_exists("MarketdataArr", $marketdataExtended)) {
                 if (is_array($marketdataArr)) {
-                    if($futureHoursOnly) {
-                        foreach ($marketdataExtended["MarketdataArr"] as $item) {
-                            $start = $item["start"];
-                            if ($start > $dateTimeNow) {
-                                $marketdataArr[] = $item;
+
+                    foreach ($marketdataExtended["MarketdataArr"] as $item) {
+
+                        $addItem = false;
+                        $start = $item["start"];
+                        if($startTS > 0) {
+                            if($start >= $startTS){
+                                if($futureHoursOnly) {
+                                    if ($start > $dateTimeNow) { $addItem = true; } else { $addItem = false; }
+                                } else {
+                                    $addItem = true;
+                                }
+                            }
+                        } else {
+                            if($futureHoursOnly) {
+                                if ($start > $dateTimeNow) { $addItem = true; } else { $addItem = false; }
+                            } else {
+                                $addItem = true;
                             }
                         }
-                    } else {
-                        $marketdataArr = $marketdataExtended["MarketdataArr"];
+
+                        if($endTS > 0) {
+                            if ($start + 3600 > $endTS) {
+                                $addItem = false;
+                            }
+                        }
+
+                        if($addItem) {
+                            $marketdataArr[] = $item;
+                        }
                     }
                 } else {
                     if ($this->logLevel >= LogLevel::WARN) {
@@ -319,6 +426,14 @@ trait AWATTAR_FUNCTIONS {
             }
             $marketdataArr = false;
         }
+
+        if ($this->logLevel >= LogLevel::TRACE) {
+            $this->AddLog(__FUNCTION__, sprintf("Return marketdataArr [StartTS: %s - EndTS: %s | %b] \r\n%s", $this->UnixTimestamp2String($startTS), $this->UnixTimestamp2String($endTS), $futureHoursOnly, print_r($marketdataArr, true)));
+            foreach($marketdataArr as $marketdataItem) {
+                $this->AddLog(__FUNCTION__, sprintf(" %s - %s ct/kWh", date('d.m.y H:i', $marketdataItem["start"]),  $marketdataItem["EPEXSpot"]));  
+            }
+        }
+
         return $marketdataArr;
     }
 
