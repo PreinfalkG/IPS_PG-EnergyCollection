@@ -1,8 +1,13 @@
 <?php
 
-SetValue($_IPS['VARIABLE'], $_IPS['VALUE']);
-
 const INSTANCE_ID = %%INSTANZ_ID%%;
-aWATTar_UpdatePriceBasedSwitches(INSTANCE_ID, 'ActionSkript', true);
+
+
+$ipsVariable = $_IPS['VARIABLE'];
+SetValue($ipsVariable, $_IPS['VALUE']);
+
+//aWATTar_UpdatePriceBasedSwitches(INSTANCE_ID, 'ActionSkript', true);
+$parrentId = IPS_GetParent($ipsVariable);
+aWATTar_UpdatePriceBasedSwitch(INSTANCE_ID, 'ActionSkript', $parrentId);
 
 ?>

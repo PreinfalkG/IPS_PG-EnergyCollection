@@ -117,6 +117,10 @@ class aWATTar extends IPSModule {
 
 		$this->UpdateMarketdata("TimerAutoUpdate_aWATTar");
 
+		if(idate('H') == 14) {
+			$this->UpdatePriceBasedSwitches("TimerAutoUpdate_aWATTar");
+		}
+
 		$next_timer = strtotime(date('Y-m-d H:00:10', strtotime('+1 hour')));
 		if ($this->logLevel >= LogLevel::DEBUG) {
 			$this->AddLog(__FUNCTION__, sprintf("SET next_timer @%s]", $this->UnixTimestamp2String($next_timer)));
@@ -126,7 +130,7 @@ class aWATTar extends IPSModule {
 	}
 
 
-	public function UpdatePriceBasedSwitches(string $caller = '?', bool $useExistingPeriods) {
+	public function UpdatePriceBasedSwitches(string $caller = '?') {
 
 		$categorieRoodId = IPS_GetParent($this->InstanceID);
 		$dummyParentId = $this->CreateCategoryByIdent(self::DUMMY_IDENT_PriceBasedSwitch, "Preisbasierter Schalter", $categorieRoodId, 100, "Plug");
@@ -134,12 +138,12 @@ class aWATTar extends IPSModule {
 		foreach ($childrenIDs as $childId) {
 			$ident = IPS_GetObject($childId)["ObjectIdent"];
 			if (str_starts_with($ident, "priceBasedSwitch_")) {
-				$this->UpdatePriceSwitch($childId, $useExistingPeriods);
+				$this->UpdatePriceBasedSwitch('UpdatePriceBasedSwitches()', $childId);
 			}
 		}
 	}
 
-	public function UpdatePriceSwitch(int $priceSwitchRoodId, bool $useExistingPeriods) {
+	public function UpdatePriceBasedSwitch(string $caller = '?', int $priceSwitchRoodId) {
 
 		$ident = IPS_GetObject($priceSwitchRoodId)["ObjectIdent"];
 		if (str_starts_with($ident, "priceBasedSwitch_")) {
@@ -169,12 +173,12 @@ class aWATTar extends IPSModule {
 				case 2:
 					//$this->ResetWochenplan($varId_wochenplan);
 					SetValue($varId_data, "-");
-					$this->SetHoursBelowThreshold($priceSwitchRoodId);
+					$this->UpdateWochenplan($priceSwitchRoodId);
 					break;
 				case 3:
 					//$this->ResetWochenplan($varId_wochenplan);
 					SetValue($varId_data, "-");
-					$lowestContinuousHours = $this->SetHoursWithLowestPrice($priceSwitchRoodId);
+					$this->UpdateWochenplan($priceSwitchRoodId);
 					break;
 				default:
 					break;
@@ -214,7 +218,8 @@ class aWATTar extends IPSModule {
 								$varName =  sprintf("%s - %s [%s] <- NOW",  date('H:i', $start),  date('H:i', $end), date('d.m.Y', $start));
 							}
 							$epexSpotPrice = $item["EPEXSpot"];
-							$varId = $this->SetVariableByIdent($epexSpotPrice, $identName, $varName, $marketDataDummyId, VARIABLE::TYPE_FLOAT, $hour_start + 5, "CentkWh.3", $icon = "", true, 4, 1);
+							//$varId = $this->SetVariableByIdent($epexSpotPrice, $identName, $varName, $marketDataDummyId, VARIABLE::TYPE_FLOAT, $hour_start + 5, "CentkWh.3", $icon = "", true, 4, 1);
+							$varId = $this->SetVariableByIdent($epexSpotPrice, $identName, $varName, $marketDataDummyId, VARIABLE::TYPE_FLOAT, $marketDataCnt++, "CentkWh.3", $icon = "", true, 4, 1);
 							if ($varId !== false) {
 								if (time() > $end) {
 									IPS_SetDisabled($varId, true);
@@ -293,17 +298,57 @@ class aWATTar extends IPSModule {
 
 	public function BufferDebugInfos(string $caller = '?') {
 
-		$bufferArr = $this->GetBufferList();
-		$bufferCnt = count($bufferArr);
-		if ($bufferCnt > 0) {
-			$this->AddLog(__FUNCTION__, "List of used Buffers:");
-			foreach ($bufferArr as $bufferName) {
-				$this->AddLog(__FUNCTION__, sprintf(" - %s {%s}", $bufferName, print_r($this->__get($bufferName), true)));
+		if(false) {
+			$bufferArr = $this->GetBufferList();
+			$bufferCnt = count($bufferArr);
+			if ($bufferCnt > 0) {
+				$this->AddLog(__FUNCTION__, "List of used Buffers:");
+				foreach ($bufferArr as $bufferName) {
+					$this->AddLog(__FUNCTION__, sprintf(" - %s {%s}", $bufferName, print_r($this->__get($bufferName), true)));
+				}
+			} else {
+				$this->AddLog(__FUNCTION__, "No Buffers used!");
 			}
 		} else {
-			$this->AddLog(__FUNCTION__, "No Buffers used!");
+
+			$testNr = 4;
+			switch($testNr) {
+				case 1:
+					$marketdataArr = $this->GetMarketdataArr( 0,  0, null, false);
+					$this->DebugPriceArr($marketdataArr, "MarketdataArr");
+					//protected function GetLowestPriceHours(array $inputDataArr, int $numberOfHours) {
+					$dataArr = $this->GetLowestPriceHours($marketdataArr, 10);
+					$this->DebugPriceArr($dataArr, "GetLowestPriceHours");
+					break;
+				case 2:
+					$marketdataArr = $this->GetMarketdataArr( 0,  0, null, false);
+					$this->DebugPriceArr($marketdataArr, "MarketdataArr");
+					//protected function GetLowestContinuousHours(array $inputDataArr, int $numberOfHours) {
+					$dataArr = $this->GetLowestContinuousHours($marketdataArr, 10);
+					$this->DebugPriceArr($dataArr, "GetLowestContinuousHours");
+					break;
+				case 3:					
+					$startTS = idate('H') * 3600;
+					$endTS = idate('H') * 3600 + 20 * 3600;
+					$duration = 3*3600;
+					//protected function GetHoursWithLowestPrice(int $timeWindowStart, int $timeWindowEnd, float $threshold=null, int $durationSec, bool $continuousHours, bool $futureHoursOnly=true)
+					$dataArr = $this->GetHoursWithLowestPrice($startTS, $endTS, 4.0, $duration, true, true);
+					$this->DebugPriceArr($dataArr, "");
+					break;
+				case 4:
+					$startTS = idate('H') * 3600;
+					$endTS = idate('H') * 3600 + 20 * 3600;
+					$duration = 3*3600;				
+					//protected function GetHoursWithLowestPrice(int $timeWindowStart, int $timeWindowEnd, float $threshold=null, int $durationSec, bool $continuousHours, bool $futureHoursOnly=true)
+					$dataArr = $this->GetHoursWithLowestPrice($startTS, $endTS, null, $duration, true, true);
+					$this->DebugPriceArr($dataArr, "");
+					break;
+
+			}
+		    
+
+		
 		}
-		$this->SaveVariables();
 	}
 
 

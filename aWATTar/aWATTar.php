@@ -12,7 +12,11 @@ trait AWATTAR_FUNCTIONS {
         ];
         $params2 = [
             'start' => strtotime(date('d.m.Y 00:00:00')) * 1000
-        ];        
+        ];    
+        $params3 = [
+            'start' => strtotime(date('d.m.Y 00:00:00')) * 1000,
+            'end' => strtotime('tomorrow 24:00') * 1000
+        ];            
 
         // curl options
         $curlOptions = [
@@ -27,7 +31,7 @@ trait AWATTAR_FUNCTIONS {
         ];
 
         $apiURL = 'https://api.awattar.at/v1/marketdata';
-        $apiURL = 'https://api.awattar.at/v1/marketdata?' . http_build_query($params2);
+        //$apiURL = 'https://api.awattar.at/v1/marketdata?' . http_build_query($params3);
         
         $ch = curl_init($apiURL);
 
@@ -189,10 +193,9 @@ trait AWATTAR_FUNCTIONS {
         $this->SaveVariables();
     }
 
-
-    protected function SetHoursBelowThreshold(int $priceSwitchRoodId) {
+    protected function UpdateWochenplan(int $priceSwitchRoodId) {
        
-        //$varId_mode = IPS_GetObjectIDByIdent("_mode", $priceSwitchRoodId);
+        $varId_mode = IPS_GetObjectIDByIdent("_mode", $priceSwitchRoodId);
         $varId_threshold = IPS_GetObjectIDByIdent("_threshold", $priceSwitchRoodId);
         $varId_timeWindowStart = IPS_GetObjectIDByIdent("_timeWindowStart", $priceSwitchRoodId);
         $varId_timeWindowEnd = IPS_GetObjectIDByIdent("_timeWindowEnd", $priceSwitchRoodId);
@@ -201,42 +204,31 @@ trait AWATTAR_FUNCTIONS {
         $varId_switch = IPS_GetObjectIDByIdent("_switch", $priceSwitchRoodId);
         $varId_wochenplan = IPS_GetObjectIDByIdent("_wochenplan", $varId_switch);
 
-        //$priceMode = GetValueInteger($varId_mode);
-        $threshold = GetValueFloat($varId_threshold);
-        $timeWindowStart = GetValueInteger($varId_timeWindowStart);
-        $timeWindowEnd = GetValueInteger($varId_timeWindowEnd);
+        $priceMode = GetValueInteger($varId_mode);       
+        $threshold = null;
+        if($priceMode == 2) { $threshold = GetValueFloat($varId_threshold); }
+        
+        $timeWindowStart = GetValueInteger($varId_timeWindowStart) + 3600;
+        $timeWindowEnd = GetValueInteger($varId_timeWindowEnd) + 3600;
+
+        $todayMinutes = idate('h') * 60 + idate('i');
+        $timeWindowStartMinutes = idate('h', $timeWindowStart) * 60 + idate('i', $timeWindowStart);
+        if($todayMinutes > $timeWindowStartMinutes) {
+            $timeWindowStart += 24*3600;
+        }
+
+        if($timeWindowStart > $timeWindowEnd) {
+            $timeWindowEnd += 24*3600;
+        }
+
+
         $duration = GetValueInteger($varId_duration);
-        //$continuousHours = GetValueBoolean($varId_continuousHours);
+        $continuousHours = GetValueBoolean($varId_continuousHours);
+        if($priceMode == 3) { $continuousHours = true; }
         //$switch = GetValueBoolean($varId_switch);
      
-        $hoursBelowThresholdArr = $this->GetHoursBelowThreshold($timeWindowStart, $timeWindowEnd, $threshold, $duration, true);
+        $hoursBelowThresholdArr = $this->GetHoursWithLowestPrice($timeWindowStart, $timeWindowEnd, $threshold, $duration, $continuousHours, true);
         $this->SetWochenplanEventPoints($varId_wochenplan, $priceSwitchRoodId, $hoursBelowThresholdArr);
-       
-    }
-
-
-    protected function SetHoursWithLowestPrice(int $priceSwitchRoodId) {
-
-        //$varId_mode = IPS_GetObjectIDByIdent("_mode", $priceSwitchRoodId);
-        $varId_threshold = IPS_GetObjectIDByIdent("_threshold", $priceSwitchRoodId);
-        $varId_timeWindowStart = IPS_GetObjectIDByIdent("_timeWindowStart", $priceSwitchRoodId);
-        $varId_timeWindowEnd = IPS_GetObjectIDByIdent("_timeWindowEnd", $priceSwitchRoodId);
-        $varId_duration = IPS_GetObjectIDByIdent("_duration", $priceSwitchRoodId);
-        $varId_continuousHours = IPS_GetObjectIDByIdent("_continuousHours", $priceSwitchRoodId);
-        $varId_switch = IPS_GetObjectIDByIdent("_switch", $priceSwitchRoodId);
-        $varId_wochenplan = IPS_GetObjectIDByIdent("_wochenplan", $varId_switch);
-        $varId_data = IPS_GetObjectIDByIdent("_data", $priceSwitchRoodId);
-
-        //$priceMode = GetValueInteger($varId_mode);
-        //$threshold = GetValueFloat($varId_threshold);
-        $timeWindowStart = GetValueInteger($varId_timeWindowStart);
-        $timeWindowEnd = GetValueInteger($varId_timeWindowEnd);
-        $duration = GetValueInteger($varId_duration);
-        //$continuousHours = GetValueBoolean($varId_continuousHours);
-        //$switch = GetValueBoolean($varId_switch);
-
-        $hoursWithLowestPriceApp = $this->GetHoursWithLowestPrice($timeWindowStart, $timeWindowEnd, $duration, true);
-        $this->SetWochenplanEventPoints($varId_wochenplan, $priceSwitchRoodId, $hoursWithLowestPriceApp);
     }
 
 
@@ -295,42 +287,29 @@ trait AWATTAR_FUNCTIONS {
     }
 
 
-    protected function GetHoursBelowThreshold(int $timeWindowStart, int $timeWindowEnd, float $threshold, int $duration, bool $futureHoursOnly=true) {
+    protected function GetHoursWithLowestPrice(int $timeWindowStart, int $timeWindowEnd, float $threshold=null, int $durationSec, bool $continuousHours, bool $futureHoursOnly=true) {
         
         $hoursBelowThresholdArr = [];
 
-        $durationHours = idate('G', $duration);
-        $startTS = strtotime('midnight') + $timeWindowStart + 3600;
-        $endTS = strtotime(date("Y-m-d 0:0:0")) + $timeWindowEnd + 3600;
+        $numberOfHours = idate('H', $durationSec);
+        $startTS = strtotime('midnight') + $timeWindowStart;
+        $endTS = strtotime(date("Y-m-d 0:0:0")) + $timeWindowEnd; //+ 3600;
         if ($timeWindowEnd <= $timeWindowStart) {
             $endTS = $endTS + 3600 * 24;
         }
 
         if ($this->logLevel >= LogLevel::TRACE) {
-            $this->AddLog(__FUNCTION__, sprintf("StartWindow: %s {%s} | EndWindow: %s {%s} | duration %s | %s hours", $this->UnixTimestamp2String($startTS), $timeWindowStart, $this->UnixTimestamp2String($endTS), $timeWindowEnd, print_r($duration, true), $durationHours));
+            $this->AddLog(__FUNCTION__, sprintf("StartWindow: %s {%s} | EndWindow: %s {%s}",  $timeWindowStart, $this->UnixTimestamp2String($startTS), $timeWindowEnd, $this->UnixTimestamp2String($endTS)));
+            $this->AddLog(__FUNCTION__, sprintf(" | threshold: %s ct | continuousHours: %b | durationSec %s = %s hours {=%s}",  print_r($threshold, true),  $continuousHours, $durationSec, $numberOfHours,$this->UnixTimestamp2String($durationSec)));
         }
 
-        $marketdataArr = $this->GetMarketdataArr($startTS, $endTS, $futureHoursOnly);
+        $marketdataArr = $this->GetMarketdataArr($startTS, $endTS, $threshold, $futureHoursOnly);
         if ($marketdataArr !== false) {
-            $itemCnt = 0;
-            $col = array_column($marketdataArr, "EPEXSpot");
-            array_multisort($col, SORT_ASC, $marketdataArr);
-
-            foreach ($marketdataArr as $item) {
-                $EPEXSpot = $item["EPEXSpot"];
-                if ($EPEXSpot <= $threshold) {
-                    $itemCnt++;
-                    $hoursBelowThresholdArr[] = $item;
-                }
-                if ($itemCnt >= $durationHours) {
-                    break;
-                }
-            }
-            if (count($hoursBelowThresholdArr) > 1) {
-                $col = array_column($hoursBelowThresholdArr, "start");
-                array_multisort($col, SORT_ASC, $hoursBelowThresholdArr);
-            }
-        
+            if($continuousHours) {
+                $hoursBelowThresholdArr =  $this->GetLowestContinuousHours($marketdataArr, $numberOfHours);
+            } else {
+                $hoursBelowThresholdArr =  $this->GetLowestPriceHours($marketdataArr, $numberOfHours);
+            }      
         } else {
             if ($this->logLevel >= LogLevel::WARN) {
                 $this->AddLog(__FUNCTION__, "KEINE aktuellen Marktdaten verfügbar > [GetMarketdataArr() === false]");
@@ -339,96 +318,118 @@ trait AWATTAR_FUNCTIONS {
         return $hoursBelowThresholdArr;
     }
 
-    protected function GetHoursWithLowestPrice(int $timeWindowStart, int $timeWindowEnd, int $duration, bool $futureHoursOnly=true) {
-        
+
+    protected function GetLowestPriceHours(array $inputDataArr, int $numberOfHours) {
+
         $hoursWithLowestPriceArr = [];
 
-        $durationHours = idate('G', $duration);
-        $startTS = strtotime('midnight') + $timeWindowStart + 3600;
-        $endTS = strtotime(date("Y-m-d 0:0:0")) + $timeWindowEnd + 3600;
-        if ($timeWindowEnd <= $timeWindowStart) {
-            $endTS = $endTS + 3600 * 24;
+        if ($inputDataArr !== false) {
+            $col = array_column($inputDataArr, "EPEXSpot");
+            array_multisort($col, SORT_ASC, $inputDataArr);
+
+            $hoursWithLowestPriceArr = array_slice($inputDataArr, 0, $numberOfHours, true);
+            if (count($hoursWithLowestPriceArr) > 1) {
+                $col = array_column($hoursWithLowestPriceArr, "start");
+                array_multisort($col, SORT_ASC, $hoursWithLowestPriceArr);
+            }
+        } else {
+            if ($this->logLevel >= LogLevel::WARN) {
+                $this->AddLog(__FUNCTION__, "KEINE aktuellen Marktdaten verfügbar!");
+            }
         }
 
         if ($this->logLevel >= LogLevel::TRACE) {
-            $this->AddLog(__FUNCTION__, sprintf("StartWindow: %s {%s} | EndWindow: %s {%s} | duration %s | %s hours", $this->UnixTimestamp2String($startTS), $timeWindowStart, $this->UnixTimestamp2String($endTS), $timeWindowEnd, print_r($duration, true), $durationHours));
+            $this->AddLog(__FUNCTION__, sprintf("IputDataArr Cnt: %s | GetLowest %s hours | OutputDataArr Cnt: %s", count($inputDataArr), $numberOfHours, count($hoursWithLowestPriceArr)));
         }
 
-        $marketdataArr = $this->GetMarketdataArr($startTS, $endTS, $futureHoursOnly);
-        if ($marketdataArr !== false) {
-            $entries = count($marketdataArr);
+        return $hoursWithLowestPriceArr;
+    }
+
+    protected function GetLowestContinuousHours(array $inputDataArr, int $numberOfHours) {
+
+        $hoursWithLowestPriceArr = [];
+        $priceArrTEMP = [];
+
+        if ($inputDataArr !== false) {
+            $entries = count($inputDataArr);
 
             $index1 = 0;
-            foreach ($marketdataArr as $item) {
-                $fullPeriod = true;
-                $this->SendDebug(__FUNCTION__, sprintf("foreach Item Key '%s'",  $item["key"]), 0);
+            foreach ($inputDataArr as $item) {
+                $sufficientContinuousHours = true;
+                //if ($this->logLevel >= LogLevel::TRACE) {
+                //    $this->SendDebug(__FUNCTION__, sprintf("foreach Item Key '%s'",  $item["key"]), 0);
+                //}
                 $price = 0;
+                $startTS = -1;
+                $endTS = -1;
                 $key = $item["key"];
-                $start = date('H:i', $item["start"]);
-                for ($i = $index1; $i <= $index1 + $durationHours - 1; $i++) {
+                for ($i = $index1; $i <= $index1 + $numberOfHours - 1; $i++) {
+
                     if ($i >= $entries) {
-                        //$this->SendDebug(__FUNCTION__, sprintf("break at %s (%s)", $i, $entries), 0);
-                        $fullPeriod = false;
+                        $sufficientContinuousHours = false;
+                        if ($this->logLevel >= LogLevel::TRACE) {
+                            $this->AddLog(__FUNCTION__, sprintf(" - %s with %d h > zu wenige Elemente vorhanden" ,$key, $numberOfHours));
+                        }                         
                         break;
                     } else {
-                        //$this->SendDebug(__FUNCTION__, sprintf("for '%s' {%s}",  $marketdataArrFromNow[$i]["key"], $price), 0);
-                        $price += $marketdataArr[$i]["EPEXSpot"];
+                        $startTS = $inputDataArr[$i]["start"];
                     }
-                }
-                if ($fullPeriod) {
+
+                    if(($endTS != -1) AND ($endTS != $startTS)) {                      
+                        $sufficientContinuousHours = false;
+                        if ($this->logLevel >= LogLevel::TRACE) {
+                            $this->AddLog(__FUNCTION__, sprintf(" - %s with %d h > no continuous hour {endTS: %s != startTS: %s}", $key, $numberOfHours, $this->UnixTimestamp2String($endTS), $this->UnixTimestamp2String($startTS)));
+                        }                          
+                        break;
+                    } else {
+                        $price += $inputDataArr[$i]["EPEXSpot"];
+                        $endTS = $inputDataArr[$i]["end"];
+                    }
+                 }
+                if ($sufficientContinuousHours) {
                     $priceArrTEMP[] = ["startKey" => $key, "price" => round($price, 3)];
+
+                    if ($this->logLevel >= LogLevel::TRACE) {
+                        $this->AddLog(__FUNCTION__, sprintf(" - add %s with %d h > average price %.3f ct/kWh" ,$key, $numberOfHours, $price/$numberOfHours));
+                    }                    
                 }
                 $index1++;
             }
 
-            if (count($priceArrTEMP) > 1) {
+            if (count($priceArrTEMP) > 0) {
                 $col = array_column($priceArrTEMP, "price");
                 array_multisort($col, SORT_ASC, SORT_NUMERIC, $priceArrTEMP);
 
                 $startKey = $priceArrTEMP[0]["startKey"];
                 $averagePrice = $priceArrTEMP[0]["price"];
 
+                if ($this->logLevel >= LogLevel::TRACE) {
+                    $this->AddLog(__FUNCTION__, sprintf(" - lowest average price with %d continuous hours starts at %s" ,$numberOfHours, $startKey));
+                } 
 
-                $col = array_column($priceArrTEMP, "price");
-                array_multisort($col, SORT_ASC, SORT_NUMERIC, $priceArrTEMP);
+                $inputDataArrStartKey = array_search($startKey , array_column($inputDataArr, 'key'));
 
-
-                $marketdataArrStartKey = array_search($startKey , array_column($marketdataArr, 'key'));
-
-                if($marketdataArrStartKey !== false) {
-
-                    for($i=$marketdataArrStartKey; $i < ($marketdataArrStartKey + $durationHours); $i++ ) {
-                        $hoursWithLowestPriceArr[] = $marketdataArr[$i];
+                if($inputDataArrStartKey !== false) {
+                    for($i=$inputDataArrStartKey; $i < ($inputDataArrStartKey + $numberOfHours); $i++ ) {
+                        $hoursWithLowestPriceArr[] = $inputDataArr[$i];
                     }
                 }
-
-
-                //$durationHours
-                //IPS_LogMessage("x1", print_r($startKey, true));
-                //IPS_LogMessage("x2", print_r($durationHours, true));
-                //IPS_LogMessage("x3", print_r($averagePrice, true));
-                //IPS_LogMessage("zzz", print_r($marketdataArr, true));
-
             }
-
-            //IPS_LogMessage("xx", print_r($priceArrTEMP, true));
-
-    
-            //$continuousHoursArr = $priceArrTEMP;            
-
-        
+       
         } else {
             if ($this->logLevel >= LogLevel::WARN) {
-                $this->AddLog(__FUNCTION__, "KEINE aktuellen Marktdaten verfügbar > [GetMarketdataArr() === false]");
+                $this->AddLog(__FUNCTION__, "KEINE aktuellen Marktdaten verfügbar!");
             }
+        }
+
+        if ($this->logLevel >= LogLevel::TRACE) {
+            $this->AddLog(__FUNCTION__, sprintf("IputDataArr Cnt: %s | GetLowest %s hours | OutputDataArr Cnt: %s", count($inputDataArr), $numberOfHours, count($hoursWithLowestPriceArr)));
         }
 
         return $hoursWithLowestPriceArr;
     }
 
-
-
-    protected function GetMarketdataArr(int $startTS = 0, int $endTS = 0, bool $futureHoursOnly=false) {
+    protected function GetMarketdataArr(int $startTS = 0, int $endTS = 0, float $threshold=null, bool $futureHoursOnly=false) {
 
         $marketdataArr = [];
         $dateTimeNow = time();
@@ -472,6 +473,12 @@ trait AWATTAR_FUNCTIONS {
                             }
                         }
 
+                        if (!is_null($threshold)) {
+                            if ($item["EPEXSpot"] > $threshold) {
+                                $addItem = false;
+                            }
+                        }                        
+
                         if ($addItem) {
                             $marketdataArr[] = $item;
                         }
@@ -496,13 +503,26 @@ trait AWATTAR_FUNCTIONS {
         }
 
         if ($this->logLevel >= LogLevel::TRACE) {
-            $this->AddLog(__FUNCTION__, sprintf("Return marketdataArr [StartTS: %s - EndTS: %s | %b] \r\n%s", $this->UnixTimestamp2String($startTS), $this->UnixTimestamp2String($endTS), $futureHoursOnly, print_r($marketdataArr, true)));
+            $this->AddLog(__FUNCTION__, sprintf("Return marketdataArr [StartTS: %s - EndTS: %s | threshold: %.3f | FutureHoursOnly: %b]", $this->UnixTimestamp2String($startTS), $this->UnixTimestamp2String($endTS), print_r($threshold, true), $futureHoursOnly));
             foreach ($marketdataArr as $marketdataItem) {
                 $this->AddLog(__FUNCTION__, sprintf(" %s - %s ct/kWh", date('d.m.y H:i', $marketdataItem["start"]),  $marketdataItem["EPEXSpot"]));
             }
         }
 
         return $marketdataArr;
+    }
+
+    protected function DebugPriceArr(array $inputDataArr, string $name) {
+    
+        $this->AddLog(__FUNCTION__, sprintf("|| %s", $name));
+        foreach($inputDataArr as $key => $value) {
+            $start = date('d.m.y H:i', $value["start"]);
+            $end = date('d.m.y H:i', $value["end"]);
+            $price = $value["EPEXSpot"];
+
+            $logMsg = sprintf("|| -key: '%s' | %s - %s | %.3f ct/kWh", print_r($key, true), $start, $end, $price);
+            $this->AddLog(__FUNCTION__, $logMsg);
+        }
     }
 
     protected function GetEventScheduleGroupDayFromTimestamp(int $timestamp) {
