@@ -6,10 +6,13 @@ trait AWATTAR_FUNCTIONS {
 
     protected function RequestMarketdata() {
         // build params
-        $params = [
+        $params1 = [
             'start' => strtotime(date('d.m.Y 00:00:00')) * 1000,
             'end' => (time() + 3600 * 24) * 1000
         ];
+        $params2 = [
+            'start' => strtotime(date('d.m.Y 00:00:00')) * 1000
+        ];        
 
         // curl options
         $curlOptions = [
@@ -23,8 +26,9 @@ trait AWATTAR_FUNCTIONS {
             ]
         ];
 
-        $apiURL = 'https://api.awattar.at/v1/marketdata?' . http_build_query($params);
-        //$apiURL = 'https://api.awattar.at/v1/marketdata';
+        $apiURL = 'https://api.awattar.at/v1/marketdata';
+        $apiURL = 'https://api.awattar.at/v1/marketdata?' . http_build_query($params2);
+        
         $ch = curl_init($apiURL);
 
 
@@ -95,7 +99,7 @@ trait AWATTAR_FUNCTIONS {
             'Entries' => 0,
             'FirstStartHour' => mktime(0, 0, 0, 1, 1, 2038),
             'LastStartHour' => 0,
-            'Timestamp' => time(),
+            'LastUpdate' => time(),
             'MarketdataArr' => []
         ];
 
@@ -423,8 +427,6 @@ trait AWATTAR_FUNCTIONS {
     }
 
 
-    
-
 
     protected function GetMarketdataArr(int $startTS = 0, int $endTS = 0, bool $futureHoursOnly=false) {
 
@@ -502,7 +504,6 @@ trait AWATTAR_FUNCTIONS {
 
         return $marketdataArr;
     }
-
 
     protected function GetEventScheduleGroupDayFromTimestamp(int $timestamp) {
 

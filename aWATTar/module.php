@@ -233,7 +233,36 @@ class aWATTar extends IPSModule {
 					}
 				} else {
 					$summeryCnt++;
-					$this->SetVariableByIdent($value, $key, $key, $summeryDummyId, -1, $position = $summeryCnt);
+					$type = -1;
+					$profile = "";
+					switch($key) {
+						case 'CurrentPrice':
+							$type = VARIABLE::TYPE_FLOAT; $profile = "CentkWh.3";
+							break;
+						case 'AveragePrice':
+							$type = VARIABLE::TYPE_FLOAT; $profile = "CentkWh.3";
+							break;							
+						case 'LowestPrice':
+							$type = VARIABLE::TYPE_FLOAT; $profile = "CentkWh.3";
+							break;
+						case 'HighestPrice':
+							$type = VARIABLE::TYPE_FLOAT; $profile = "CentkWh.3";
+							break;
+						case 'Entries':
+							$type = VARIABLE::TYPE_INTEGER; $profile = "";
+							break;
+						case 'FirstStartHour':
+							$type = VARIABLE::TYPE_INTEGER; $profile = "~UnixTimestamp";
+							break;
+						case 'LastStartHour':
+							$type = VARIABLE::TYPE_INTEGER; $profile = "~UnixTimestamp";
+							break;
+						case 'LastUpdate':
+							$type = VARIABLE::TYPE_INTEGER; $profile = "~UnixTimestamp";
+							break;																																																		
+					}
+					$this->SetVariableByIdent($value, $key, $key, $summeryDummyId, $type, $summeryCnt, $profile);
+
 					if ($this->logLevel >= LogLevel::TEST) {
 						$this->AddLog(__FUNCTION__, sprintf("Set '%s' to Variable '%s'", $value, $key));
 					}
