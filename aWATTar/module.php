@@ -15,7 +15,7 @@ class aWATTar extends IPSModule {
 	use COMMON_FUNCTIONS;
 	use AWATTAR_FUNCTIONS;
 
-	private $logLevel = 3;		// WARN = 3;
+	private $logLevel = 4;		// WARN = 3 | INFO = 4
 	private $logCnt = 0;
 	private $enableIPSLogOutput = false;
 
@@ -42,17 +42,17 @@ class aWATTar extends IPSModule {
 		IPS_LogMessage(__CLASS__ . "_" . __FUNCTION__, $logMsg);
 
 		$logMsg = sprintf("KernelRunlevel '%s'", IPS_GetKernelRunlevel());
-		if ($this->logLevel >= LogLevel::DEBUG) {
+		if ($this->logLevel >= LogLevel::INFO) {
 			$this->AddLog(__FUNCTION__, $logMsg);
 		}
+		IPS_LogMessage(__CLASS__ . "_" . __FUNCTION__, $logMsg);
 
 		$this->RegisterPropertyBoolean("EnableAutoUpdate", false);
 		$this->RegisterPropertyInteger("LogLevel", LogLevel::INFO);
 		$this->RegisterPropertyInteger("priceBasedSwitches", 0);
 
-
-		$this->RegisterTimer('TimerAutoUpdate_aWATTar', 0, 'aWATTar_TimerAutoUpdate_aWATTar($_IPS["TARGET"]);');
-
+		//$this->RegisterTimer('TimerUpdate_aWATTar', 0, 'aWATTar_TimerUpdate_aWATTar($_IPS["TARGET"]);');
+		$this->RegisterTimer('TimerUpdate_aWATTar', 0, 'aWATTar_TimerUpdate_aWATTar('.$this->InstanceID.');');
 		$this->RegisterMessage(0, IPS_KERNELMESSAGE);
 	}
 
@@ -63,11 +63,18 @@ class aWATTar extends IPSModule {
 	}
 
 
-	public function onKernelReady() {
-		$this->AddLog(__FUNCTION__, "Inital aWATTar Marketdata Update on 'onKernelReady'");
-		$this->SetUpdateInterval(10 * 1000);
-		//$this->UpdateMarketdata("Inital Update 'onKernelReady'");
+	public function MessageSink($TimeStamp, $SenderID, $Message, $Data) {
+		$logMsg = sprintf("TimeStamp: %s | SenderID: %s | Message: %d | Data: %s", $TimeStamp, $SenderID, $Message, json_encode($Data));
+		$this->AddLog(__FUNCTION__, $logMsg, 0, true); 
+
+		if($Message == IPS_KERNELMESSAGE) {
+			if ($Data[0] == KR_READY ) {
+				$this->AddLog(__FUNCTION__, "Set Initial Interval for 'TimerUpdate_aWATTar' to 30 seconds", 0, true); 
+				$this->SetUpdateInterval(30);
+			}
+		}
 	}
+
 
 	public function ApplyChanges() {
 
@@ -98,39 +105,46 @@ class aWATTar extends IPSModule {
 	public function SetUpdateInterval(int $timerInterval) {
 		if ($timerInterval < 1) {
 			if ($this->logLevel >= LogLevel::INFO) {
-				$this->AddLog(__FUNCTION__, "Auto-Update stopped [TimerIntervall = 0]");
+				$this->AddLog(__FUNCTION__, "'TimerUpdate_aWATTar' stopped [TimerIntervall = 0]");
 			}
 		} else {
 			if ($this->logLevel >= LogLevel::INFO) {
-				$this->AddLog(__FUNCTION__, sprintf("Set 'TimerAutoUpdate' to %s sec", $timerInterval));
+				$this->AddLog(__FUNCTION__, sprintf("Set 'TimerUpdate_aWATTar' Interval to %s sec", $timerInterval));
 			}
 		}
-		$this->SetTimerInterval("TimerAutoUpdate_aWATTar", $timerInterval * 1000);
+		$this->SetTimerInterval("TimerUpdate_aWATTar", $timerInterval * 1000);
 	}
 
 
-	public function TimerAutoUpdate_aWATTar() {
+	public function TimerUpdate_aWATTar() {
 
 		if ($this->logLevel >= LogLevel::DEBUG) {
-			$this->AddLog(__FUNCTION__, "TimerAutoUpdate_aWATTar called ...");
+			$this->AddLog(__FUNCTION__, "TimerUpdate_aWATTar called ...", 0 , true);
 		}
 
-		$this->UpdateMarketdata("TimerAutoUpdate_aWATTar");
+		$result = $this->UpdateMarketdata("TimerUpdate_aWATTar");
+		if($result === false) {
 
-		if(idate('H') == 14) {
-			$this->UpdatePriceBasedSwitches("TimerAutoUpdate_aWATTar");
+			if ($this->logLevel >= LogLevel::WARN) {
+				$this->AddLog(__FUNCTION__, "Problem 'UpdateMarketdata()' > SET 'TimerUpdate_aWATTar' to 120 sec for next try", 0, true);
+			}
+			$this->SetUpdateInterval(120); 	// next Update in 120 sec
+
+		} else {
+
+			$this->UpdatePriceBasedSwitches("TimerUpdate_aWATTar", false);
+
+			$next_timer = strtotime(date('Y-m-d H:00:10', strtotime('+1 hour')));
+			if ($this->logLevel >= LogLevel::DEBUG) {
+				$this->AddLog(__FUNCTION__, sprintf("SET next_timer @%s]", $this->UnixTimestamp2String($next_timer)));
+			}
+			$this->SetUpdateInterval($next_timer - time()); 	// next hour at xx:xx:10
+
 		}
-
-		$next_timer = strtotime(date('Y-m-d H:00:10', strtotime('+1 hour')));
-		if ($this->logLevel >= LogLevel::DEBUG) {
-			$this->AddLog(__FUNCTION__, sprintf("SET next_timer @%s]", $this->UnixTimestamp2String($next_timer)));
-		}
-		$this->SetUpdateInterval($next_timer - time()); 	// next hour at xx:xx:10
-
 	}
 
 
-	public function UpdatePriceBasedSwitches(string $caller = '?') {
+	public function UpdatePriceBasedSwitches(string $caller='?', bool $force=true) {
 
 		$categorieRoodId = IPS_GetParent($this->InstanceID);
 		$dummyParentId = $this->CreateCategoryByIdent(self::DUMMY_IDENT_PriceBasedSwitch, "Preisbasierter Schalter", $categorieRoodId, 100, "Plug");
@@ -138,18 +152,31 @@ class aWATTar extends IPSModule {
 		foreach ($childrenIDs as $childId) {
 			$ident = IPS_GetObject($childId)["ObjectIdent"];
 			if (str_starts_with($ident, "priceBasedSwitch_")) {
-				$this->UpdatePriceBasedSwitch('UpdatePriceBasedSwitches()', $childId);
+				if($force) {
+					$this->UpdatePriceBasedSwitch(sprintf("UpdatePriceBasedSwitches() | forced by '%s'", $caller), $childId);
+				} else {
+					if(idate('H') == 14) {
+						$this->UpdatePriceBasedSwitch(sprintf("UpdatePriceBasedSwitches() | @14:00 by '%s'", $caller), $childId);	
+					} else {
+						$varId_data = IPS_GetObjectIDByIdent("_data", $childId);
+						$lastUpdated = IPS_GetVariable($varId_data)["VariableUpdated"];
+						$secondsAgo = round(time() - $lastUpdated);
+						if($secondsAgo > 23*3600) {
+							$this->UpdatePriceBasedSwitch(sprintf("UpdatePriceBasedSwitches() | isOutdated '%s' ", $this->UnixTimestamp2String($lastUpdated)), $childId);	
+						}
+					}
+				}
 			}
 		}
 	}
 
-	public function UpdatePriceBasedSwitch(string $caller = '?', int $priceSwitchRoodId) {
+	public function UpdatePriceBasedSwitch(string $caller='?', int $priceSwitchRoodId) {
 
 		$ident = IPS_GetObject($priceSwitchRoodId)["ObjectIdent"];
 		if (str_starts_with($ident, "priceBasedSwitch_")) {
 
-			if ($this->logLevel >= LogLevel::TRACE) {
-				$this->AddLog(__FUNCTION__, sprintf("Update PriceSwitch '%s'", $ident));
+			if ($this->logLevel >= LogLevel::DEBUG) {
+				$this->AddLog(__FUNCTION__, sprintf("Update PriceSwitch '%s' {caller: %s}", $ident, $caller));
 			}
 
 			$varId_mode = IPS_GetObjectIDByIdent("_mode", $priceSwitchRoodId);
@@ -186,9 +213,9 @@ class aWATTar extends IPSModule {
 		}
 	}
 
+	public function UpdateMarketdataVariables() {
 
-	public function SaveVariables() {
-
+		$result = true;
 		$marketdataExtended = $this->__get("Buff_MarketdataExtended");
 		$summeryCnt = 0;
 		$marketDataCnt = 0;
@@ -201,7 +228,6 @@ class aWATTar extends IPSModule {
 				if ($key == "MarketdataArr") {
 					$marketdataArr = $value;
 					if (is_array($marketdataArr)) {
-						$marketDataCnt++;
 						foreach ($marketdataArr as $item) {
 							$identName = $item["key"];
 							$start = $item["start"];
@@ -230,10 +256,12 @@ class aWATTar extends IPSModule {
 									$this->AddLog(__FUNCTION__, sprintf("Set Value '%s' to Variable '%s'", $epexSpotPrice, $identName));
 								}
 							} else {
+								$result = false;
 								$this->HandleError(__FUNCTION__, sprintf("Error updating Variable '%s'", $identName));
 							}
 						}
 					} else {
+						$result = false;
 						$this->HandleError(__FUNCTION__, "Error: 'MarketdataArr' in 'Buff_MarketdataExtended' is no Array");
 					}
 				} else {
@@ -274,8 +302,15 @@ class aWATTar extends IPSModule {
 				}
 			}
 		} else {
+			$result = false;
 			$this->HandleError(__FUNCTION__, "Error: 'Buff_MarketdataExtended' is no Array");
 		}
+		if($result) {
+			if ($this->logLevel >= LogLevel::INFO) {
+				$this->AddLog(__FUNCTION__, sprintf("%s MarketdataVariables updated", $marketDataCnt));
+			}
+		}
+		return $result;
 	}
 
 
@@ -550,11 +585,11 @@ class aWATTar extends IPSModule {
 		SetValue($this->GetIDForIdent("lastErrorTimestamp"), time());
 
 		if ($this->logLevel >= LogLevel::ERROR) {
-			$this->AddLog($sender, $msg);
+			$this->AddLog($sender, $msg, 0, true);
 		}
 	}
 
-	protected function AddLog($name, $daten, $format = 0) {
+	protected function AddLog($name, $daten, $format = 0, $ipsLogOutput=false) {
 		$this->logCnt++;
 		$logSender = "[" . __CLASS__ . "] - " . $name;
 		if ($this->logLevel >= LogLevel::DEBUG) {
@@ -562,7 +597,7 @@ class aWATTar extends IPSModule {
 		}
 		$this->SendDebug($logSender, $daten, $format);
 
-		if ($this->enableIPSLogOutput) {
+		if ($this->enableIPSLogOutput or $ipsLogOutput) {
 			if ($format == 0) {
 				IPS_LogMessage($logSender, $daten);
 			} else {

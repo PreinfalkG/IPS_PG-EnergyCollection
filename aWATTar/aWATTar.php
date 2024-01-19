@@ -30,11 +30,15 @@ trait AWATTAR_FUNCTIONS {
             ]
         ];
 
-        $apiURL = 'https://api.awattar.at/v1/marketdata';
-        //$apiURL = 'https://api.awattar.at/v1/marketdata?' . http_build_query($params3);
-        
-        $ch = curl_init($apiURL);
+        //$apiURL = 'https://api.awattar.at/v1/marketdata';
+        $apiURL = 'https://api.awattar.at/v1/marketdata?' . http_build_query($params3);
 
+        
+        if ($this->logLevel >= LogLevel::COMMUNICATION) {
+            $this->AddLog(__FUNCTION__, sprintf("Request '%s' [start: %s | end: %s]", $apiURL, $this->UnixTimestamp2String($params3["start"]/1000), $this->UnixTimestamp2String($params3["end"]/1000)));
+        }
+
+        $ch = curl_init($apiURL);
 
         $httpResponse = false;
         $startTime =  microtime(true);
@@ -57,9 +61,7 @@ trait AWATTAR_FUNCTIONS {
                 if ($this->logLevel >= LogLevel::WARN) {
                     $this->AddLog(__FUNCTION__, $msg);
                 }
-            }
-
-            if ($this->logLevel >= LogLevel::COMMUNICATION) {
+            } else if ($this->logLevel >= LogLevel::COMMUNICATION) {
                 $this->AddLog(__FUNCTION__, sprintf("OK > httpStatusCode '%s' < %s ", $httpStatusCode, $apiURL));
             }
         } catch (Exception $e) {
@@ -164,6 +166,8 @@ trait AWATTAR_FUNCTIONS {
 
 
     public function UpdateMarketdata(string $caller) {
+
+        $result = true;
         if ($this->logLevel >= LogLevel::INFO) {
             $this->AddLog(__FUNCTION__, sprintf("UpdateMarketdata [Trigger > %s] ...", $caller));
         }
@@ -176,21 +180,25 @@ trait AWATTAR_FUNCTIONS {
                 $this->__set("Buff_MarketdataExtended", $this->marketdataExtended);
                 $this->__set("Buff_MarketdataExtendedTS", $this->UnixTimestamp2String(time()));
                 $this->__set("Buff_MarketdataExtendedCnt", intval($this->__get("Buff_MarketdataExtendedCnt")) + 1);
-                //IPS_LogMessage("MarketdataExtended", print_r($this->marketdataExtended, true));
 
-                if ($this->logLevel >= LogLevel::DEBUG) {
-                    $this->AddLog(__FUNCTION__, sprintf("MarketdataExtended created with %d Entries", $this->marketdataExtended["Entries"]));
+                if ($this->logLevel >= LogLevel::INFO) {
+                    $this->AddLog(__FUNCTION__, sprintf("Buff_MarketdataExtended updated with %d Entries", $this->marketdataExtended["Entries"]));
                 }
                 $this->Increase_CounterVariable($this->GetIDForIdent("updateCntOk"));
+
+                $result = $this->UpdateMarketdataVariables();
+
             } else {
+                $result = false;
                 $this->Increase_CounterVariable($this->GetIDForIdent("updateCntNotOk"));
                 $this->HandleError(__FUNCTION__, "ERROR creating 'MarketdataExtended'");
             }
         } else {
-            $this->HandleError(__FUNCTION__, "no aWATTar Marketdata avialable");
+            $result = false;
+            $this->HandleError(__FUNCTION__, "Error: no aWATTar Marketdata avialable");
         }
 
-        $this->SaveVariables();
+        return $result;
     }
 
     protected function UpdateWochenplan(int $priceSwitchRoodId) {
