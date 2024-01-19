@@ -211,6 +211,7 @@ trait AWATTAR_FUNCTIONS {
         $varId_continuousHours = IPS_GetObjectIDByIdent("_continuousHours", $priceSwitchRoodId);
         $varId_switch = IPS_GetObjectIDByIdent("_switch", $priceSwitchRoodId);
         $varId_wochenplan = IPS_GetObjectIDByIdent("_wochenplan", $varId_switch);
+        $varId_data = IPS_GetObjectIDByIdent("_data", $priceSwitchRoodId);
 
         $priceMode = GetValueInteger($varId_mode);       
         $threshold = null;
@@ -219,24 +220,33 @@ trait AWATTAR_FUNCTIONS {
         $timeWindowStart = GetValueInteger($varId_timeWindowStart) + 3600;
         $timeWindowEnd = GetValueInteger($varId_timeWindowEnd) + 3600;
 
-        $todayMinutes = idate('h') * 60 + idate('i');
-        $timeWindowStartMinutes = idate('h', $timeWindowStart) * 60 + idate('i', $timeWindowStart);
-        if($todayMinutes > $timeWindowStartMinutes) {
-            $timeWindowStart += 24*3600;
+        $todaySeconds = time() - strtotime("today");
+        if($todaySeconds > $timeWindowStart) {
+              $timeWindowStart += 24*3600;
         }
-
         if($timeWindowStart > $timeWindowEnd) {
             $timeWindowEnd += 24*3600;
         }
 
+        $startTS = strtotime('midnight') + $timeWindowStart;
+        $endTS = strtotime(date("Y-m-d 0:0:0")) + $timeWindowEnd; //+ 3600;
+        if ($timeWindowEnd <= $timeWindowStart) {
+            $endTS = $endTS + 3600 * 24;
+        }
 
         $duration = GetValueInteger($varId_duration);
         $continuousHours = GetValueBoolean($varId_continuousHours);
-        if($priceMode == 3) { $continuousHours = true; }
+        //if($priceMode == 3) { $continuousHours = true; }
         //$switch = GetValueBoolean($varId_switch);
-     
-        $hoursBelowThresholdArr = $this->GetHoursWithLowestPrice($timeWindowStart, $timeWindowEnd, $threshold, $duration, $continuousHours, true);
+             
+
+        $hoursBelowThresholdArr = $this->GetHoursWithLowestPrice($startTS, $endTS, $threshold, $duration, $continuousHours, true);
         $this->SetWochenplanEventPoints($varId_wochenplan, $priceSwitchRoodId, $hoursBelowThresholdArr);
+
+        $_data = GetValue($varId_data);
+        $_data .= sprintf("\r\nFolgender Zeitraum wurde verwendet: %s - %s", $this->UnixTimestamp2String($startTS), $this->UnixTimestamp2String($endTS));
+        SetValue($varId_data, $_data);
+
     }
 
 
@@ -295,21 +305,16 @@ trait AWATTAR_FUNCTIONS {
     }
 
 
-    protected function GetHoursWithLowestPrice(int $timeWindowStart, int $timeWindowEnd, float $threshold=null, int $durationSec, bool $continuousHours, bool $futureHoursOnly=true) {
+    protected function GetHoursWithLowestPrice(int $startTS, int $endTS, float $threshold=null, int $durationSec, bool $continuousHours, bool $futureHoursOnly=true) {
         
         $hoursBelowThresholdArr = [];
 
         $numberOfHours = idate('H', $durationSec);
-        $startTS = strtotime('midnight') + $timeWindowStart;
-        $endTS = strtotime(date("Y-m-d 0:0:0")) + $timeWindowEnd; //+ 3600;
-        if ($timeWindowEnd <= $timeWindowStart) {
-            $endTS = $endTS + 3600 * 24;
-        }
 
         if ($this->logLevel >= LogLevel::TRACE) {
-            $this->AddLog(__FUNCTION__, sprintf("StartWindow: %s {%s} | EndWindow: %s {%s}",  $timeWindowStart, $this->UnixTimestamp2String($startTS), $timeWindowEnd, $this->UnixTimestamp2String($endTS)));
+            $this->AddLog(__FUNCTION__, sprintf("Start: %s} | End: %s",  $this->UnixTimestamp2String($startTS), $this->UnixTimestamp2String($endTS)));
             $this->AddLog(__FUNCTION__, sprintf(" | threshold: %s ct | continuousHours: %b | durationSec %s = %s hours {=%s}",  print_r($threshold, true),  $continuousHours, $durationSec, $numberOfHours,$this->UnixTimestamp2String($durationSec)));
-        }
+        }      
 
         $marketdataArr = $this->GetMarketdataArr($startTS, $endTS, $threshold, $futureHoursOnly);
         if ($marketdataArr !== false) {

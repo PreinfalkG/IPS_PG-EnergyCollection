@@ -110,6 +110,6 @@ switch($ipsValue) {
         break;
 }
 
-aWATTar_UpdatePriceBasedSwitches(INSTANCE_ID, 'ActionSkript', true);
+aWATTar_UpdatePriceBasedSwitch(INSTANCE_ID, 'ActionSkript',  $parentId);
 
 ?>

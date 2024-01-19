@@ -363,19 +363,19 @@ class aWATTar extends IPSModule {
 					$this->DebugPriceArr($dataArr, "GetLowestContinuousHours");
 					break;
 				case 3:					
-					$startTS = idate('H') * 3600;
-					$endTS = idate('H') * 3600 + 20 * 3600;
-					$duration = 3*3600;
+					$startTS = 0;
+					$endTS = 0;
+					$durationSec = 4*3600 - 3600;
 					//protected function GetHoursWithLowestPrice(int $timeWindowStart, int $timeWindowEnd, float $threshold=null, int $durationSec, bool $continuousHours, bool $futureHoursOnly=true)
-					$dataArr = $this->GetHoursWithLowestPrice($startTS, $endTS, 4.0, $duration, true, true);
+					$dataArr = $this->GetHoursWithLowestPrice($startTS, $endTS, 9.0, $durationSec, false, true);
 					$this->DebugPriceArr($dataArr, "");
 					break;
 				case 4:
-					$startTS = idate('H') * 3600;
-					$endTS = idate('H') * 3600 + 20 * 3600;
-					$duration = 3*3600;				
+					$startTS = 0;
+					$endTS = 0;
+					$durationSec = 4*3600 - 3600;				
 					//protected function GetHoursWithLowestPrice(int $timeWindowStart, int $timeWindowEnd, float $threshold=null, int $durationSec, bool $continuousHours, bool $futureHoursOnly=true)
-					$dataArr = $this->GetHoursWithLowestPrice($startTS, $endTS, null, $duration, true, true);
+					$dataArr = $this->GetHoursWithLowestPrice($startTS, $endTS, null, $durationSec, true, true);
 					$this->DebugPriceArr($dataArr, "");
 					break;
 
