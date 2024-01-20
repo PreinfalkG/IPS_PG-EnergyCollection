@@ -91,6 +91,11 @@
         },
         {
             "type": "Button",
+            "caption": "Get MarketdataArr from Buffer (with Debug Output)",
+            "onClick": "aWATTar_GetMarketdataArrFromBuffer($id, 'ModulForm');"
+        },        
+        {
+            "type": "Button",
             "caption": "Buffer Debug Infos",
             "onClick": "aWATTar_BufferDebugInfos($id, 'ModulForm');"
         }

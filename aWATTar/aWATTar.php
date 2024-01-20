@@ -17,6 +17,10 @@ trait AWATTAR_FUNCTIONS {
             'start' => strtotime(date('d.m.Y 00:00:00')) * 1000,
             'end' => strtotime('tomorrow 24:00') * 1000
         ];            
+        $params4 = [
+            'start' => strtotime(date('d.m.Y 14:00:00')) * 1000,
+            'end' => strtotime('tomorrow 13:00') * 1000
+        ];    
 
         // curl options
         $curlOptions = [
@@ -32,6 +36,7 @@ trait AWATTAR_FUNCTIONS {
 
         //$apiURL = 'https://api.awattar.at/v1/marketdata';
         $apiURL = 'https://api.awattar.at/v1/marketdata?' . http_build_query($params3);
+        //$apiURL = 'https://api.awattar.at/v1/marketdata?' . http_build_query($params4);
 
         
         if ($this->logLevel >= LogLevel::COMMUNICATION) {
@@ -124,7 +129,6 @@ trait AWATTAR_FUNCTIONS {
                 $hour_end = 24;
             }
 
-
             $marketdataArrElem = [];
             $marketdataArrElem['key'] =  'EPEXSpot_' . $hour_start . '_' . $hour_end . 'h';
             $marketdataArrElem['EPEXSpot'] = round($epexSpotPrice, 3);
@@ -132,7 +136,6 @@ trait AWATTAR_FUNCTIONS {
             $marketdataArrElem['end'] = $end;
             $marketdataArrElem['startDateTime'] = $this->UnixTimestamp2String($start);
             $marketdataExt['MarketdataArr'][idate('G', $start)] =  $marketdataArrElem;
-
 
             if ($hour_start == date('G')) {
                 $marketdataExt['CurrentPrice'] = $epexSpotPrice;
@@ -237,16 +240,15 @@ trait AWATTAR_FUNCTIONS {
         $duration = GetValueInteger($varId_duration);
         $continuousHours = GetValueBoolean($varId_continuousHours);
         //if($priceMode == 3) { $continuousHours = true; }
-        //$switch = GetValueBoolean($varId_switch);
-             
+        //$switch = GetValueBoolean($varId_switch);            
 
         $hoursBelowThresholdArr = $this->GetHoursWithLowestPrice($startTS, $endTS, $threshold, $duration, $continuousHours, true);
         $this->SetWochenplanEventPoints($varId_wochenplan, $priceSwitchRoodId, $hoursBelowThresholdArr);
 
         $_data = GetValue($varId_data);
         $_data .= sprintf("\r\nFolgender Zeitraum wurde verwendet: %s - %s", $this->UnixTimestamp2String($startTS), $this->UnixTimestamp2String($endTS));
+        $_data .= sprintf("\r\nLast Updated @%s", $this->UnixTimestamp2String(time()));
         SetValue($varId_data, $_data);
-
     }
 
 
@@ -522,6 +524,13 @@ trait AWATTAR_FUNCTIONS {
             }
         }
 
+        return $marketdataArr;
+    }
+
+    public function GetMarketdataArrFromBuffer(string $caller) {
+
+        $marketdataArr = $this->GetMarketdataArr(0, 0, null, false);
+        $this->DebugPriceArr($marketdataArr, "MarketdataArr");
         return $marketdataArr;
     }
 

@@ -213,6 +213,8 @@ class aWATTar extends IPSModule {
 		}
 	}
 
+
+
 	public function UpdateMarketdataVariables() {
 
 		$result = true;
@@ -222,7 +224,117 @@ class aWATTar extends IPSModule {
 		if (is_array($marketdataExtended)) {
 
 			$summeryDummyId = $this->CreateDummyInstanceByIdent("summary", "Zusammenfassung", $this->InstanceID, $position = 10);
-			$marketDataDummyId = $this->CreateDummyInstanceByIdent("marketData_24h", "Marktdaten 24 Stunden", $this->InstanceID, $position = 300);
+			$marketDataDummyId = $this->CreateDummyInstanceByIdent("marketData_24h", "Marktpreis 24 Stunden [EPEX Spot® Netto]", $this->InstanceID, $position = 300);
+
+			foreach ($marketdataExtended as $key => $value) {
+				if ($key == "MarketdataArr") {
+					$marketdataArr = $value;
+					if (is_array($marketdataArr)) {
+
+						$maxIndex = count($marketdataArr) - 1;
+						$minIndex = $maxIndex - 23;
+						if($minIndex < 0) {
+							$minIndex = 0;
+						}
+
+						for($i=$maxIndex; $i>=$minIndex; $i--) {
+
+							$identName = $marketdataArr[$i]["key"];
+							$start = $marketdataArr[$i]["start"];
+							$end = $marketdataArr[$i]["end"];
+							$hour_start = idate('G', $start);
+							$hour_end = idate('G', $end);
+							if ($hour_end == 0) {
+								$hour_end = 24;
+							}
+
+							$hourNOW = idate('G');
+							$varName =  sprintf("%s - %s [%s]",  date('H:i', $start),  date('H:i', $end), date('d.m.Y', $start));
+							if ($hour_start == $hourNOW) {
+								$varName =  sprintf("%s - %s [%s] <- NOW",  date('H:i', $start),  date('H:i', $end), date('d.m.Y', $start));
+							}
+							$epexSpotPrice = $marketdataArr[$i]["EPEXSpot"];
+							//$varId = $this->SetVariableByIdent($epexSpotPrice, $identName, $varName, $marketDataDummyId, VARIABLE::TYPE_FLOAT, $hour_start + 5, "CentkWh.3", $icon = "", true, 4, 1);
+							$varId = $this->SetVariableByIdent($epexSpotPrice, $identName, $varName, $marketDataDummyId, VARIABLE::TYPE_FLOAT, $i, "CentkWh.3", $icon = "", true, 4, 1);
+							if ($varId !== false) {
+								if (time() > $end) {
+									IPS_SetDisabled($varId, true);
+								} else {
+									IPS_SetDisabled($varId, false);
+								}
+								if ($this->logLevel >= LogLevel::TEST) {
+									$this->AddLog(__FUNCTION__, sprintf("Set Value '%s' to Variable '%s'", $epexSpotPrice, $identName));
+								}
+								$marketDataCnt++;
+							} else {
+								$result = false;
+								$this->HandleError(__FUNCTION__, sprintf("Error updating Variable '%s'", $identName));
+							}
+						}
+
+					} else {
+						$result = false;
+						$this->HandleError(__FUNCTION__, "Error: 'MarketdataArr' in 'Buff_MarketdataExtended' is no Array");
+					}
+				} else {
+					$summeryCnt++;
+					$type = -1;
+					$profile = "";
+					switch($key) {
+						case 'CurrentPrice':
+							$type = VARIABLE::TYPE_FLOAT; $profile = "CentkWh.3";
+							break;
+						case 'AveragePrice':
+							$type = VARIABLE::TYPE_FLOAT; $profile = "CentkWh.3";
+							break;							
+						case 'LowestPrice':
+							$type = VARIABLE::TYPE_FLOAT; $profile = "CentkWh.3";
+							break;
+						case 'HighestPrice':
+							$type = VARIABLE::TYPE_FLOAT; $profile = "CentkWh.3";
+							break;
+						case 'Entries':
+							$type = VARIABLE::TYPE_INTEGER; $profile = "";
+							break;
+						case 'FirstStartHour':
+							$type = VARIABLE::TYPE_INTEGER; $profile = "~UnixTimestamp";
+							break;
+						case 'LastStartHour':
+							$type = VARIABLE::TYPE_INTEGER; $profile = "~UnixTimestamp";
+							break;
+						case 'LastUpdate':
+							$type = VARIABLE::TYPE_INTEGER; $profile = "~UnixTimestamp";
+							break;																																																		
+					}
+					$this->SetVariableByIdent($value, $key, $key, $summeryDummyId, $type, $summeryCnt, $profile);
+
+					if ($this->logLevel >= LogLevel::TEST) {
+						$this->AddLog(__FUNCTION__, sprintf("Set '%s' to Variable '%s'", $value, $key));
+					}
+				}
+			}
+		} else {
+			$result = false;
+			$this->HandleError(__FUNCTION__, "Error: 'Buff_MarketdataExtended' is no Array");
+		}
+		if($result) {
+			if ($this->logLevel >= LogLevel::INFO) {
+				$this->AddLog(__FUNCTION__, sprintf("%s MarketdataVariables updated", $marketDataCnt));
+			}
+		}
+		return $result;
+	}
+
+	public function UpdateMarketdataVariables_OLD() {
+
+		$result = true;
+		$marketdataExtended = $this->__get("Buff_MarketdataExtended");
+		$summeryCnt = 0;
+		$marketDataCnt = 0;
+		if (is_array($marketdataExtended)) {
+
+			$summeryDummyId = $this->CreateDummyInstanceByIdent("summary", "Zusammenfassung", $this->InstanceID, $position = 10);
+			$marketDataDummyId = $this->CreateDummyInstanceByIdent("marketData_24h", "Marktpreise 24 Stunden [EPEX Spot® Netto]", $this->InstanceID, $position = 300);
 
 			foreach ($marketdataExtended as $key => $value) {
 				if ($key == "MarketdataArr") {
