@@ -42,6 +42,7 @@ switch($ipsValue) {
         IPS_SetHidden($varId_data, false);    
         SetValueBoolean($varId_switch, false);                            
         SetValue($varId_data, "Der Virtuelle Schalter ist immer AUS");
+        aWATTar_UpdatePriceBasedSwitch(INSTANCE_ID, 'ActionSkript',  $parentId);
         break;
     case 1:
         IPS_SetDisabled($varId_timeWindowStart, true);
@@ -63,6 +64,7 @@ switch($ipsValue) {
         IPS_SetHidden($varId_data, false);    
         SetValueBoolean($varId_switch, true);                            
         SetValue($varId_data, "Der Virtuelle Schalter ist immer EIN");    
+        aWATTar_UpdatePriceBasedSwitch(INSTANCE_ID, 'ActionSkript',  $parentId);
         break;
     case 2:
         IPS_SetDisabled($varId_timeWindowStart, false);
@@ -83,7 +85,8 @@ switch($ipsValue) {
         IPS_SetDisabled($varId_data, false);
         IPS_SetHidden($varId_data, false);    
         SetValueBoolean($varId_switch, false);                            
-        SetValue($varId_data, "xxXXxX");        
+        SetValue($varId_data, "xxXXxX");     
+        aWATTar_UpdatePriceBasedSwitch(INSTANCE_ID, 'ActionSkript',  $parentId);   
         break;
     case 3:
         IPS_SetDisabled($varId_timeWindowStart, false);
@@ -105,11 +108,10 @@ switch($ipsValue) {
         IPS_SetHidden($varId_data, false);    
         SetValueBoolean($varId_switch, false);                            
         SetValue($varId_data, "yyYYyy");       
+        aWATTar_UpdatePriceBasedSwitch(INSTANCE_ID, 'ActionSkript',  $parentId);
         break;
     default:
         break;
 }
-
-aWATTar_UpdatePriceBasedSwitch(INSTANCE_ID, 'ActionSkript',  $parentId);
 
 ?>

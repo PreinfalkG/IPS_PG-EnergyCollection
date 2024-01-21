@@ -119,7 +119,7 @@ class aWATTar extends IPSModule {
 
 	public function TimerUpdate_aWATTar() {
 
-		if ($this->logLevel >= LogLevel::DEBUG) {
+		if ($this->logLevel >= LogLevel::INFO) {
 			$this->AddLog(__FUNCTION__, "TimerUpdate_aWATTar called ...", 0 , true);
 		}
 
@@ -560,10 +560,6 @@ class aWATTar extends IPSModule {
 
 	protected function RegisterVariables() {
 
-		//$this->RegisterVariableInteger("modbusReceiveCnt", "Modbus Receive Cnt", "", 900);
-		//$this->RegisterVariableInteger("modbusReceiveLast", "Modbus Last Receive", "~UnixTimestamp", 901);
-		//$this->RegisterVariableInteger("modbusTransmitCnt", "Modbus Transmit Cnt", "", 910);
-
 
 		$priceBasedSwitches = $this->ReadPropertyInteger("priceBasedSwitches");
 
@@ -608,7 +604,6 @@ class aWATTar extends IPSModule {
 						$this->AddLog(__FUNCTION__, sprintf("ActionSkrip '%s' Registered: %s", self::IDENT_ActionSkript_Default, $actionSkriptDefault_ObjId));
 					}
 
-
 					$varId = $this->SetVariableByIdent(9.0, "_threshold", "Wunschpreis", $dummyId, VARIABLE::TYPE_FLOAT, $position++, "aWATTar.threshold", "");
 					IPS_SetIcon($varId, "Graph");
 					IPS_SetVariableCustomAction($varId, $actionSkriptDefault_ObjId);
@@ -645,7 +640,7 @@ class aWATTar extends IPSModule {
 					$varId = $this->SetVariableByIdent(0, "_data", "Info", $dummyId, VARIABLE::TYPE_STRING, $position++, "~TextBox", "");
 
 					IPS_Sleep(100);
-					RequestActionEx($varIdMode, 0, "Modul");
+					//RequestActionEx($varIdMode, 0, "Modul");
 				}
 			} else {
 				$dummyId = @IPS_GetObjectIDByIdent($identName, $dummyParentId);

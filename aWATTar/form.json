@@ -81,7 +81,7 @@
         },
         {
             "type": "Button",
-            "label": "Update all preisbasierte Schalter",
+            "label": "Update preisbasierte Schalter",
             "onClick": "aWATTar_UpdatePriceBasedSwitches($id, 'ModulForm', true);"
         },  
         {

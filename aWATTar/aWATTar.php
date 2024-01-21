@@ -301,6 +301,11 @@ trait AWATTAR_FUNCTIONS {
         $_data .= sprintf("\r\nFolgender Zeitraum wurde verwendet: %s - %s", $this->UnixTimestamp2String($startTS), $this->UnixTimestamp2String($endTS));
         $_data .= sprintf("\r\nLast Updated @%s", $this->UnixTimestamp2String(time()));
         SetValue($varId_data, $_data);
+
+		if ($this->logLevel >= LogLevel::INFO) {
+			$this->AddLog(__FUNCTION__, sprintf("Wochenplan '%s' wurde aktualisiert", IPS_GetName($priceSwitchRoodId)), 0 , true);
+		}
+
     }
 
 
@@ -375,7 +380,6 @@ trait AWATTAR_FUNCTIONS {
         }
 
         SetValue($varId_data, $switchOnInfo);
-
 
     }
 

@@ -108,12 +108,13 @@ trait COMMON_FUNCTIONS {
             if ($varType < 0) {
                 $varType = $this->GetTypeFromValue($value);
             }
-
-            if ($this->logLevel >= LogLevel::TRACE) {
-                $this->AddLog(__FUNCTION__, sprintf("Create IPS-Variable :: Type: %d | Ident: %s | Profile: %s | Name: %s", $varType, $identName, $varProfile, $varName));
-            }
             $varId = IPS_CreateVariable($varType);
             $variable_created = true;
+
+            if ($this->logLevel >= LogLevel::TRACE) {
+                $this->AddLog(__FUNCTION__, sprintf("Createed IPS-Variable :: Type: %d | Ident: %s | Profile: %s | Name: %s | ForceUpdate: %b", $varType, $identName, $varProfile, $varName, $forceUpdate));
+            }
+
         }
 
         if ($variable_created || $forceUpdate) {
@@ -125,29 +126,22 @@ trait COMMON_FUNCTIONS {
             if (!empty($icon)) {
                 IPS_SetIcon($varId, $icon);
             }
-            //$archivInstanzID = IPS_GetInstanceListByModuleID("{43192F0B-135B-4CE7-A0A7-1475603F3060}")[0];
-            //AC_SetLoggingStatus ($archivInstanzID, $varId, true);
-            //IPS_ApplyChanges($archivInstanzID);
-        }
 
-        if ($faktor != 1) {
-            $value = $value * $faktor;
-        }
-
-        if (!is_null($round)) {
-            $value = round($value, $round);
-        }
-
-        $result = SetValue($varId, $value);
-
-        if (!$result) {
-            if ($this->logLevel >= LogLevel::WARN) {
-                $this->AddLog(__FUNCTION__, sprintf("WARN :: Cannot save Variable '%s' with value '%s' [parentId: %s | identName: %s | varId: %s | type: %s]", $varName, print_r($value), $parentId, $identName, $varId, gettype($value)));
+            if ($faktor != 1) {
+                $value = $value * $faktor;
             }
-            return false;
-        } else {
-            return $varId;
+            if (!is_null($round)) {
+                $value = round($value, $round);
+            }
+            $result = SetValue($varId, $value);
+            if (!$result) {
+                if ($this->logLevel >= LogLevel::WARN) {
+                    $this->AddLog(__FUNCTION__, sprintf("WARN :: Cannot set Value '%s' to Varible '%s' [parentId: %s | identName: %s | varId: %s | type: %s]", print_r($value), $varName, $parentId, $identName, $varId, gettype($value)));
+                }
+            }
         }
+
+        return $varId;
     }
 
 
