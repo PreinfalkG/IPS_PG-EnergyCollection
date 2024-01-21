@@ -20,6 +20,12 @@
             "name": "cb_CalcBruttoPreise"
         },
         {
+            "type": "CheckBox",
+            "caption": "Generiere zufällige Marktpreise für Testing",
+            "enabled": true,
+            "name": "cb_CreateRandomMartdata"
+        },        
+        {
             "name": "LogLevel",
             "type": "Select",
             "caption": "Debug/Log Level",

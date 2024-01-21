@@ -98,6 +98,44 @@ trait AWATTAR_FUNCTIONS {
     }
 
 
+    protected function CreateTestMarketdata() {
+
+        $testMarketdataArr = [];
+        $offsetHours = 0;
+        $numberOfHours = 24;
+        $testPrices = [10, 0, -11, 55, 65, 61, 48, 42, 80, 84, 39, 35, 100, 112, 123, 43, 34, 69, 68, 34, 44, 48, 35, 44];
+        $testPrices = [10, 0, -11, 55];
+        $testPrices = [];
+
+        $startDateTime = time() + $offsetHours*3600;   
+        $startDateTime = strtotime(date("Y-m-d H:0:0", $startDateTime));
+        $priceCnt = count($testPrices);
+
+        for($i=0; $i<$numberOfHours; $i++) {
+
+            $startTS = $startDateTime + $i*3600;
+            $price = 12.3;
+            if($i < $priceCnt) {
+                $price = $testPrices[$i];
+            } else {
+                $price =  rand(0, 450);
+                if($price > 380 ) {
+                    $price = rand(0, 10) * -1;
+                }
+            }
+            $item = [];
+            $item["start_timestamp"] = $startTS * 1000; 
+            $item["end_timestamp"] = ($startTS + 3600) * 1000; 
+            $item["marketprice"] = $price;
+            $item["unit"] = "Eur/MWh";     
+            if ($this->logLevel >= LogLevel::DEBUG) {     
+                $this->AddLog(__FUNCTION__, sprintf(" --TestPrice: %s :: %.3f ct/kWh", $this->UnixTimestamp2String($item["start_timestamp"]/1000), $item["marketprice"]/10));
+            }
+            $testMarketdataArr[] = $item;
+        }
+        return $testMarketdataArr;
+    }
+
     protected function CreateMarketdataExtended(array $jsonMarketdata) {
 
         $epexSpotPriceArr = [];
@@ -114,7 +152,6 @@ trait AWATTAR_FUNCTIONS {
             'MarketdataArr' => []
         ];
 
-
         foreach ($jsonMarketdata as $item) {
 
             $start = $item['start_timestamp'] / 1000;
@@ -123,8 +160,8 @@ trait AWATTAR_FUNCTIONS {
             $epexSpotPrice = floatval($item['marketprice'] / 10);
             $epexSpotPriceArr[] = $epexSpotPrice;
 
-            $hour_start = date('G', $start);
-            $hour_end = date('G',  $end);
+            $hour_start = idate('H', $start);
+            $hour_end = idate('H',  $end);
             if ($hour_end == 0) {
                 $hour_end = 24;
             }
@@ -135,9 +172,10 @@ trait AWATTAR_FUNCTIONS {
             $marketdataArrElem['start'] = $start;
             $marketdataArrElem['end'] = $end;
             $marketdataArrElem['startDateTime'] = $this->UnixTimestamp2String($start);
-            $marketdataExt['MarketdataArr'][idate('G', $start)] =  $marketdataArrElem;
+            //$marketdataExt['MarketdataArr'][idate('H', $start)] =  $marketdataArrElem;
+            $marketdataExt['MarketdataArr'][] =  $marketdataArrElem;
 
-            if ($hour_start == date('G')) {
+            if ($hour_start == idate('H')) {
                 $marketdataExt['CurrentPrice'] = $epexSpotPrice;
             }
 
@@ -167,7 +205,7 @@ trait AWATTAR_FUNCTIONS {
         return true;
     }
 
-
+ 
     public function UpdateMarketdata(string $caller) {
 
         $result = true;
@@ -175,8 +213,16 @@ trait AWATTAR_FUNCTIONS {
             $this->AddLog(__FUNCTION__, sprintf("UpdateMarketdata [Trigger > %s] ...", $caller));
         }
 
-        $awattarMarketData = $this->RequestMarketdata();
+        $awattarMarketData = [];
+        $createRandomMartdata = $this->ReadPropertyBoolean("cb_CreateRandomMartdata");
+        if($createRandomMartdata) {
+            $awattarMarketData = $this->CreateTestMarketdata();
+        } else {
+            $awattarMarketData = $this->RequestMarketdata();
+        }
+        
         if ($awattarMarketData !== false) {
+            
             $result = $this->CreateMarketdataExtended($awattarMarketData);
             if ($result !== false) {
 
@@ -220,15 +266,21 @@ trait AWATTAR_FUNCTIONS {
         $threshold = null;
         if($priceMode == 2) { $threshold = GetValueFloat($varId_threshold); }
         
-        $timeWindowStart = GetValueInteger($varId_timeWindowStart) + 3600;
-        $timeWindowEnd = GetValueInteger($varId_timeWindowEnd) + 3600;
+        $timeWindowStart = GetValueInteger($varId_timeWindowStart) - 86400 + 3600;
+        $timeWindowEnd = GetValueInteger($varId_timeWindowEnd) - 86400 + 3600;
 
-        $todaySeconds = time() - strtotime("today");
-        if($todaySeconds > $timeWindowStart) {
-              $timeWindowStart += 24*3600;
-        }
-        if($timeWindowStart > $timeWindowEnd) {
-            $timeWindowEnd += 24*3600;
+
+        if(($timeWindowStart == 0) AND ($timeWindowEnd == 0)) {
+            $timeWindowEnd = 48*3600;
+        } else {
+            $todaySeconds = time() - strtotime("today");
+
+            if($todaySeconds > $timeWindowStart) {
+               $timeWindowStart += 24*3600;
+            }
+            if($timeWindowStart > $timeWindowEnd) {
+                $timeWindowEnd += 24*3600;
+            }
         }
 
         $startTS = strtotime('midnight') + $timeWindowStart;
@@ -257,6 +309,8 @@ trait AWATTAR_FUNCTIONS {
         $switchOnInfo = "OnHours: ";
         $varId_data = IPS_GetObjectIDByIdent("_data", $priceSwitchRoodId);
 
+        $eventScheduleGroupInfo = [];
+
         IPS_SetEventActive($varId_wochenplan, false);
         $this->ResetWochenplan($varId_wochenplan);
 
@@ -269,7 +323,16 @@ trait AWATTAR_FUNCTIONS {
             $EPEXSpot = $hoursArr[$i]["EPEXSpot"];
 
             $eventScheduleGroupDay = $this->GetEventScheduleGroupDayFromTimestamp($start);
-            IPS_SetEventScheduleGroup($varId_wochenplan, $eventScheduleGroupDay, $eventScheduleGroupDay);
+
+            if(array_key_exists($eventScheduleGroupDay, $eventScheduleGroupInfo)) {
+                $eventScheduleGroupInfo[$eventScheduleGroupDay]["cnt"] = $eventScheduleGroupInfo[$eventScheduleGroupDay]["cnt"] + 1;
+            } else {
+                IPS_SetEventScheduleGroup($varId_wochenplan, $eventScheduleGroupDay, $eventScheduleGroupDay);
+                $eventScheduleGroupInfo[$eventScheduleGroupDay]["cnt"] = 1;
+                //$SchaltpunktID++;
+                //IPS_SetEventScheduleGroupPoint($varId_wochenplan, $eventScheduleGroupDay, $SchaltpunktID, 0, 0, 0, 0);
+                //$this->AddLog(__FUNCTION__, sprintf(" [%d/%d] Initial OFF POINT added for day '%s' @00:00:00", $i, $count, $eventScheduleGroupDay));
+            }
 
             $SchaltpunktID++;
             IPS_SetEventScheduleGroupPoint($varId_wochenplan, $eventScheduleGroupDay, $SchaltpunktID, idate('H', $start), idate('i', $start),  idate('s', $start), 1);
@@ -301,6 +364,16 @@ trait AWATTAR_FUNCTIONS {
         } else {
             $switchOnInfo = "KEINE Stunden mit den Vorgaben vorhanden!";
         }
+
+        foreach($eventScheduleGroupInfo as $key => $value) {
+            if ($this->logLevel >= LogLevel::TRACE) {
+                $this->AddLog(__FUNCTION__,sprintf(" - %s Schaltpunkt(e) added for EventScheduleGroup '%s'", $value["cnt"], $key));
+            }
+
+            $SchaltpunktID++;
+            @IPS_SetEventScheduleGroupPoint($varId_wochenplan, $key, $SchaltpunktID, 0, 0, 0, 0);
+        }
+
         SetValue($varId_data, $switchOnInfo);
 
 

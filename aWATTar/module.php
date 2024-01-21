@@ -50,6 +50,7 @@ class aWATTar extends IPSModule {
 		$this->RegisterPropertyBoolean("EnableAutoUpdate", false);
 		$this->RegisterPropertyInteger("LogLevel", LogLevel::INFO);
 		$this->RegisterPropertyInteger("priceBasedSwitches", 0);
+		$this->RegisterPropertyBoolean("cb_CreateRandomMartdata", false);
 
 		//$this->RegisterTimer('TimerUpdate_aWATTar', 0, 'aWATTar_TimerUpdate_aWATTar($_IPS["TARGET"]);');
 		$this->RegisterTimer('TimerUpdate_aWATTar', 0, 'aWATTar_TimerUpdate_aWATTar('.$this->InstanceID.');');
@@ -214,7 +215,6 @@ class aWATTar extends IPSModule {
 	}
 
 
-
 	public function UpdateMarketdataVariables() {
 
 		$result = true;
@@ -230,6 +230,10 @@ class aWATTar extends IPSModule {
 				if ($key == "MarketdataArr") {
 					$marketdataArr = $value;
 					if (is_array($marketdataArr)) {
+
+						if ($this->logLevel >= LogLevel::DEBUG) {     
+							$this->DebugPriceArr($marketdataArr, "UpdateMarketdataVariables()");
+						}
 
 						$maxIndex = count($marketdataArr) - 1;
 						$minIndex = $maxIndex - 23;
@@ -255,7 +259,8 @@ class aWATTar extends IPSModule {
 							}
 							$epexSpotPrice = $marketdataArr[$i]["EPEXSpot"];
 							//$varId = $this->SetVariableByIdent($epexSpotPrice, $identName, $varName, $marketDataDummyId, VARIABLE::TYPE_FLOAT, $hour_start + 5, "CentkWh.3", $icon = "", true, 4, 1);
-							$varId = $this->SetVariableByIdent($epexSpotPrice, $identName, $varName, $marketDataDummyId, VARIABLE::TYPE_FLOAT, $i, "CentkWh.3", $icon = "", true, 4, 1);
+							//$varId = $this->SetVariableByIdent($epexSpotPrice, $identName, $varName, $marketDataDummyId, VARIABLE::TYPE_FLOAT, $i, "CentkWh.3", $icon = "", true, 4, 1);
+							$varId = $this->SetVariableByIdent($epexSpotPrice, $identName, $varName, $marketDataDummyId, VARIABLE::TYPE_FLOAT, $start + $i, "CentkWh.3", $icon = "", true, 4, 1);
 							if ($varId !== false) {
 								if (time() > $end) {
 									IPS_SetDisabled($varId, true);
@@ -633,7 +638,7 @@ class aWATTar extends IPSModule {
 						IPS_SetParent($eid, $varIdSwitch);
 						IPS_SetIdent($eid, "_wochenplan");
 						IPS_SetEventActive($eid, false);
-						IPS_SetName($eid, "Wochenplan ON-Hours");
+						IPS_SetName($eid, "Wochenplan");
 						IPS_SetEventScheduleActionEx($eid, 0, "OFF", 0xC1C1C1, "{3644F802-C152-464A-868A-242C2A3DEC5C}", ["VALUE" => false]);	//0xEDEDED
 						IPS_SetEventScheduleActionEx($eid, 1, "ON", 0x00FF11, "{3644F802-C152-464A-868A-242C2A3DEC5C}", ["VALUE" => true]);
 					}
