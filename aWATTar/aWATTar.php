@@ -34,10 +34,11 @@ trait AWATTAR_FUNCTIONS {
             ]
         ];
 
-        //$apiURL = 'https://api.awattar.at/v1/marketdata';
+        
         $apiURL = 'https://api.awattar.at/v1/marketdata?' . http_build_query($params3);
         //$apiURL = 'https://api.awattar.at/v1/marketdata?' . http_build_query($params4);
 
+        $apiURL = 'https://api.awattar.at/v1/marketdata';
         
         if ($this->logLevel >= LogLevel::COMMUNICATION) {
             $this->AddLog(__FUNCTION__, sprintf("Request '%s' [start: %s | end: %s]", $apiURL, $this->UnixTimestamp2String($params3["start"]/1000), $this->UnixTimestamp2String($params3["end"]/1000)));
