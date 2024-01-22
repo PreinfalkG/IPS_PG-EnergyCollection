@@ -311,7 +311,7 @@ class aWATTar extends IPSModule {
 							$type = VARIABLE::TYPE_INTEGER; $profile = "~UnixTimestamp";
 							break;																																																		
 					}
-					$this->SetVariableByIdent($value, $key, $key, $summeryDummyId, $type, $summeryCnt, $profile);
+					$this->SetVariableByIdent($value, $key, $key, $summeryDummyId, $type, $summeryCnt, $profile, "", true, null, 1);
 
 					if ($this->logLevel >= LogLevel::TEST) {
 						$this->AddLog(__FUNCTION__, sprintf("Set '%s' to Variable '%s'", $value, $key));
