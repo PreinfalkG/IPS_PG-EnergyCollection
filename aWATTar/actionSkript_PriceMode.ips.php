@@ -84,7 +84,7 @@ switch($ipsValue) {
         IPS_SetEventActive($varId_wochenplan, false);  
         IPS_SetDisabled($varId_data, false);
         IPS_SetHidden($varId_data, false);    
-        SetValueBoolean($varId_switch, false);                            
+        SetValueBoolean($varId_switch, false);        
         SetValue($varId_data, "xxXXxX");     
         aWATTar_UpdatePriceBasedSwitch(INSTANCE_ID, 'ActionSkript',  $parentId);   
         break;

@@ -5,22 +5,28 @@ declare(strict_types=1);
 trait AWATTAR_FUNCTIONS {
 
     protected function RequestMarketdata() {
-        // build params
-        $params1 = [
-            'start' => strtotime(date('d.m.Y 00:00:00')) * 1000,
-            'end' => (time() + 3600 * 24) * 1000
-        ];
-        $params2 = [
-            'start' => strtotime(date('d.m.Y 00:00:00')) * 1000
-        ];    
-        $params3 = [
-            'start' => strtotime(date('d.m.Y 00:00:00')) * 1000,
-            'end' => strtotime('tomorrow 24:00') * 1000
-        ];            
-        $params4 = [
-            'start' => strtotime(date('d.m.Y 14:00:00')) * 1000,
-            'end' => strtotime('tomorrow 13:00') * 1000
-        ];    
+
+        $apiURL = 'https://api.awattar.at/v1/marketdata';
+        $logMsg = sprintf("Request '%s'", $apiURL);
+
+        $nowHour = idate('H');
+        if($nowHour < 14) {
+            
+                $params = [
+                    'start' => (strtotime(date('d.m.Y 24:00:00')) - 3600*24) * 1000
+                ];
+                //$paramsTest = [
+                //    'start' => (strtotime(date('d.m.Y 14:00:00')) - 3600*24) * 1000,
+                //    'end' => strtotime(date('d.m.Y 14:00:00')) * 1000
+                //];                
+                $apiURL .= '?' . http_build_query($params);       
+                $logMsg = sprintf("Request '%s' [start: %s ]", $apiURL, $this->UnixTimestamp2String($params["start"]/1000));
+        }
+
+        if ($this->logLevel >= LogLevel::COMMUNICATION) {
+            $this->AddLog(__FUNCTION__, $logMsg);
+        }
+
 
         // curl options
         $curlOptions = [
@@ -33,16 +39,6 @@ trait AWATTAR_FUNCTIONS {
                 'User-Agent: IP_Symcon'
             ]
         ];
-
-        
-        $apiURL = 'https://api.awattar.at/v1/marketdata?' . http_build_query($params3);
-        //$apiURL = 'https://api.awattar.at/v1/marketdata?' . http_build_query($params4);
-
-        $apiURL = 'https://api.awattar.at/v1/marketdata';
-        
-        if ($this->logLevel >= LogLevel::COMMUNICATION) {
-            $this->AddLog(__FUNCTION__, sprintf("Request '%s' [start: %s | end: %s]", $apiURL, $this->UnixTimestamp2String($params3["start"]/1000), $this->UnixTimestamp2String($params3["end"]/1000)));
-        }
 
         $ch = curl_init($apiURL);
 
