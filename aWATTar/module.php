@@ -330,7 +330,7 @@ class aWATTar extends IPSModule {
 		return $result;
 	}
 
-	public function UpdateMarketdataVariables_OLD() {
+	private function UpdateMarketdataVariables_OLD() {
 
 		$result = true;
 		$marketdataExtended = $this->__get("Buff_MarketdataExtended");
