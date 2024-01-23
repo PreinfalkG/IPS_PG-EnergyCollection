@@ -20,7 +20,8 @@ trait AWATTAR_FUNCTIONS {
                 //    'end' => strtotime(date('d.m.Y 14:00:00')) * 1000
                 //];                
                 $apiURL .= '?' . http_build_query($params);       
-                $logMsg = sprintf("Request '%s' [start: %s ]", $apiURL, $this->UnixTimestamp2String($params["start"]/1000));
+                $tsStart = intval($params["start"]/1000);
+                $logMsg = sprintf("Request '%s' [start: %s ]", $apiURL, $this->UnixTimestamp2String($tsStart));
         }
 
         if ($this->logLevel >= LogLevel::COMMUNICATION) {
