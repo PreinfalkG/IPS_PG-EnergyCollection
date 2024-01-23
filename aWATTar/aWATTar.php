@@ -152,8 +152,8 @@ trait AWATTAR_FUNCTIONS {
 
         foreach ($jsonMarketdata as $item) {
 
-            $start = $item['start_timestamp'] / 1000;
-            $end = $item['end_timestamp'] / 1000;
+            $start = intval($item['start_timestamp'] / 1000);
+            $end = intval($item['end_timestamp'] / 1000);
 
             $epexSpotPrice = floatval($item['marketprice'] / 10);
             $epexSpotPriceArr[] = $epexSpotPrice;
