@@ -609,6 +609,14 @@ trait AWATTAR_FUNCTIONS {
         return $marketdataArr;
     }
 
+    public function GetHourlyPriceFromBuffer(int $start, int $anzahlHours=1) {
+
+        $start = $start - ($start % 3600);
+        $end = $start + (3600 * $anzahlHours);
+        $HourlyPriceArr = $this->GetMarketdataArr($start, $end, null, false);
+        return $HourlyPriceArr;
+    }
+
     protected function DebugPriceArr(array $inputDataArr, string $name) {
     
         $this->AddLog(__FUNCTION__, sprintf("|| %s", $name));

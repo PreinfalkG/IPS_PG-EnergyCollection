@@ -136,7 +136,7 @@ trait COMMON_FUNCTIONS {
             $result = SetValue($varId, $value);
             if (!$result) {
                 if ($this->logLevel >= LogLevel::WARN) {
-                    $this->AddLog(__FUNCTION__, sprintf("WARN :: Cannot set Value '%s' to Varible '%s' [parentId: %s | identName: %s | varId: %s | type: %s]", print_r($value), $varName, $parentId, $identName, $varId, gettype($value)));
+                    $this->AddLog(__FUNCTION__, sprintf("WARN :: Cannot set Value '%s' to Varible '%s' [parentId: %s | identName: %s | varId: %s | type: %s]", print_r($value, true), $varName, $parentId, $identName, $varId, gettype($value)));
                 }
             }
         }
