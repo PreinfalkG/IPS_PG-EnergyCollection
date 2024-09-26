@@ -1,0 +1,15 @@
+{
+    "id": "{BFC9A6DB-1308-5C82-B777-2977DD84AB38}",
+    "name": "NEOOM",
+    "type": 3,
+    "vendor": "NEOOM",
+    "aliases": [
+        "NEOOM Meine Energie",
+        "Energiegemeinschaft"
+    ],
+    "parentRequirements": [],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "NEOOM",
+    "url": ""
+}

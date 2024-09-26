@@ -199,6 +199,11 @@ trait COMMON_FUNCTIONS {
         SetValueInteger($varId, GetValueInteger($varId) + 1);
     }
 
+    protected function Increase_CounterByIdent(string $identName) {
+        $varId = $this->GetIDForIdent($identName);
+        SetValueInteger($varId, GetValueInteger($varId) + 1);
+    }
+
     function UnixTimestamp2String(int $timestamp) {
         return date('d.m.Y H:i:s', $timestamp);
     }
