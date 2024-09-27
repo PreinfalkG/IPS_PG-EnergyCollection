@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+date_default_timezone_set('UTC');
+
 require_once __DIR__ . '/../libs/COMMON.php';
 require_once __DIR__ . '/NEOOM.php';
 
@@ -14,14 +16,18 @@ class Neoom extends IPSModule {
 	use COMMON_FUNCTIONS;
 	use NEOOM_FUNCTIONS;
 
+	private $timerIntervalSec = 5;
 	private $logLevel = 4;		// WARN = 3 | INFO = 4
 	private $logCnt = 0;
 	private $enableIPSLogOutput = false;
+	private $archivInstanzID;
 
 
 	public function __construct($InstanceID) {
 
 		parent::__construct($InstanceID);		// Diese Zeile nicht löschen
+
+		$this->archivInstanzID = IPS_GetInstanceListByModuleID("{43192F0B-135B-4CE7-A0A7-1475603F3060}")[0];
 
 		$this->logLevel = @$this->ReadPropertyInteger("LogLevel");
 		if ($this->logLevel >= LogLevel::TRACE) {
@@ -52,6 +58,8 @@ class Neoom extends IPSModule {
 		$this->RegisterPropertyString("tb_BearerToken", "9JOjy207cQil7sw35ScyyF6RuB61xHneJmRJacaM-YY");
 		$this->RegisterPropertyString("tb_WalletId", "9197");
 
+		$this->RegisterPropertyInteger("sd_DateFrom", 1698364800);
+		$this->RegisterPropertyInteger("ns_QueryOffsetUntilNow", 5);
 		$this->RegisterPropertyBoolean("cb_UserEnergyConsumption", false);
 		$this->RegisterPropertyBoolean("cb_UserEnergyFeedIn", false);
 		$this->RegisterPropertyBoolean("cb_EnergyCommunityInfos", false);		
@@ -98,8 +106,7 @@ class Neoom extends IPSModule {
 			if ($this->logLevel >= LogLevel::INFO) {
 				$this->AddLog(__FUNCTION__, sprintf("SET next_timer @%s]", $this->UnixTimestamp2String($next_timer)));
 			}
-			$this->SetUpdateInterval($next_timer - time()); 	// every hour at xx:xx:10
-			$this->UpdateMarketdata("on ApplyChanges() ...");
+			$this->SetUpdateInterval($this->timerIntervalSec);
 		} else {
 			$this->SetUpdateInterval(0);
 		}
@@ -122,26 +129,24 @@ class Neoom extends IPSModule {
 
 	public function TimerUpdate_NEOOM() {
 
-
-		return;
 		if ($this->logLevel >= LogLevel::INFO) {
 			$this->AddLog(__FUNCTION__, "TimerUpdate_NEOOM called ...", 0 , true);
 		}
 
-		//$result = $this->RequestNextDay("TimerUpdate_NEOOM");
+		$result = $this->RequestNextDay("TimerUpdate_NEOOM");
 		if($result === false) {
 
 			if ($this->logLevel >= LogLevel::WARN) {
-				$this->AddLog(__FUNCTION__, "Problem 'RequesRequestNextDaytData()' > SET 'TimerUpdate_NEOOM' to 120 sec for next try", 0, true);
+				$this->AddLog(__FUNCTION__, "Problem 'RequestNextDay()' > SET 'TimerUpdate_NEOOM' to 120 sec for next try", 0, true);
 			}
-			$this->SetUpdateInterval(120); 	// next Update in 120 sec
+			$this->SetUpdateInterval($this->timerIntervalSec * 10); 
 
 		} else {
 
-			if ($this->logLevel >= LogLevel::DEBUG) {
-				$this->AddLog(__FUNCTION__, sprintf("SET next_timer @%s]", $this->UnixTimestamp2String($next_timer)));
-			}
-			$this->SetUpdateInterval(time()+10);
+			//if ($this->logLevel >= LogLevel::DEBUG) {
+				//$this->AddLog(__FUNCTION__, sprintf("SET next_timer @%s]", $this->UnixTimestamp2String($next_timer)));
+			//}
+			//$this->SetUpdateInterval($this->timerIntervalSec);
 
 		}
 	}
@@ -151,46 +156,78 @@ class Neoom extends IPSModule {
 	public function RequestNextDay(string $caller = '?') {
 
 		$returnValue = true;
-
-		if ($this->logLevel >= LogLevel::INFO) {
-			$this->AddLog(__FUNCTION__, sprintf("RequestNextDay [Trigger > %s] ...", $caller));
-		}
 		
 		$dateTimeFrom =	GetValueInteger($this->GetIDForIdent("dateTimeQueryTS"));
 		$walletId = $this->ReadPropertyString("tb_WalletId");
 
 		$dtQueryFrom = new DateTime('@' . $dateTimeFrom);
-		$dtQueryTo = (new DateTime())->modify('-7 days');
+
+		$numberOfDaysBack = $this->ReadPropertyInteger("ns_QueryOffsetUntilNow");
+		$modifier = sprintf("-%d days", $numberOfDaysBack);
+		$dtQueryTo = (new DateTime())->modify($modifier);
+		//$dtQueryTo = (new DateTime())->modify('-7 days');		
 		//$dtQueryTo = (new DateTime())->createFromFormat('d/m/Y', '30/10/2023');
 		//$dtQueryTo = (new DateTime())->createFromFormat('d/m/Y\\TH:i:s', '30/10/2023T00:00:00');
 		//$dtQueryTo = new DateTime('@' . time() - 7*24*3600);
-		
+
+		if ($this->logLevel >= LogLevel::DEBUG) {
+			$this->AddLog(__FUNCTION__, sprintf("API RequestNextDay [Trigger > %s] \n - QueryFrom: %s\n - QueryTo: %s [%s]\n - Wallet ID: %s", $caller, $dtQueryFrom->format(DateTime::ATOM), $dtQueryTo->format(DateTime::ATOM), $modifier, $walletId));
+		}
 		
 		if($dtQueryFrom > $dtQueryTo) {
 			$this->HandleError(__FUNCTION__, "dtQueryFrom > dtQueryTo");
 			$returnValue = false;
 		} else {
 
-			$result = $this->QueryUserEnergy($caller, $dtQueryFrom, $dtQueryFrom, $walletId);
+			$dtQueryFrom->setTime(2,0,0);
 
-            if ($this->logLevel >= LogLevel::COMMUNICATION) {
+			$dtQueryTo = $dtQueryFrom;
+			$result = $this->QueryUserEnergy($caller, $dtQueryFrom, $dtQueryTo, $walletId);
+
+			if ($this->logLevel >= LogLevel::DEBUG) {
                 $this->AddLog(__FUNCTION__, sprintf("API Response [%s]", print_r($result,true)));
             }
 
-			if($result) {
-				$this->Increase_CounterByIdent("updateCntOk");
-				$dtQueryFrom->modify('+1 day');
-				SetValueInteger($this->GetIDForIdent("dateTimeQueryTS"), $dtQueryFrom->getTimestamp());
-			} else {
+			if($result === false) {
 				$this->HandleError(__FUNCTION__, "RESULT: " . $result);
+				$returnValue = false;
+			} else {
+				$returnValue = $this->ExtractAndAddLoggedValues($dtQueryFrom, $result);
+				if($returnValue) {
+					$this->Increase_CounterByIdent("updateCntOk");
+					$dtQueryFrom->modify('+1 day');
+					SetValueInteger($this->GetIDForIdent("dateTimeQueryTS"), $dtQueryFrom->getTimestamp());
+				}
 			}
+		}
 
+		return $returnValue;
+
+	}
+
+	public function SetStartDate(string $caller = '?') {
+
+		SetValueInteger($this->GetIDForIdent("dateTimeQueryTS"), 1698364800);	//EG Start 1698364800 | 27.10.2023
+		SetValueString($this->GetIDForIdent("dateTimeQueryInfo"), "-");
+		if ($this->logLevel >= LogLevel::INFO) {
+			$this->AddLog(__FUNCTION__, sprintf("Set 'DateTime Query' to %s [Trigger > %s]", $caller, date('d.m.Y H:i:s', 1698364800)));
 		}
 	}
 
+
 	public function ReAggregateVariables(string $caller = '?') {
-		if ($this->logLevel >= LogLevel::INFO) {
-			$this->AddLog(__FUNCTION__, sprintf("ReAggregateVariables [Trigger > %s] ...", $caller));
+		$childrenIDs = IPS_GetChildrenIDs($this->InstanceID);
+		foreach($childrenIDs as $varId) {
+			
+			$loggingStatus = AC_GetLoggingStatus($this->archivInstanzID, $varId);
+			if($loggingStatus) {
+				AC_ReAggregateVariable($this->archivInstanzID, $varId);
+				IPS_Sleep(25);
+
+				if ($this->logLevel >= LogLevel::INFO) {
+					$this->AddLog(__FUNCTION__, sprintf("ReAggregateVariable: %d [%s]] ...", $varId, IPS_GetName($varId)));
+				}
+			}
 		}
 	}
 
@@ -211,10 +248,10 @@ class Neoom extends IPSModule {
 
 	protected function RegisterProfiles() {
 
-		if (!IPS_VariableProfileExists('CentkWh.3')) {
-			IPS_CreateVariableProfile('CentkWh.3', VARIABLE::TYPE_FLOAT);
-			IPS_SetVariableProfileDigits('CentkWh.3', 3);
-			IPS_SetVariableProfileText('CentkWh.3', "", " ct/kWh");
+		if (!IPS_VariableProfileExists('CentkWh.2')) {
+			IPS_CreateVariableProfile('CentkWh.2', VARIABLE::TYPE_FLOAT);
+			IPS_SetVariableProfileDigits('CentkWh.2', 3);
+			IPS_SetVariableProfileText('CentkWh.2', "", " ct/kWh");
 			//IPS_SetVariableProfileValues('CentkWh.3', 0, 100, 1);
 		}
 
@@ -224,6 +261,14 @@ class Neoom extends IPSModule {
 			IPS_SetVariableProfileText('NEOOM_Kwh.3', "", " kWh");
 			//IPS_SetVariableProfileValues('NEOOM_Kwh.3', 0, 100, 1);
 		}
+
+		if (!IPS_VariableProfileExists('Percent.2')) {
+			IPS_CreateVariableProfile('Percent.2', VARIABLE::TYPE_FLOAT);
+			IPS_SetVariableProfileDigits('Percent.2', 2);
+			IPS_SetVariableProfileText('Percent.2', "", " %");
+			//IPS_SetVariableProfileValues('NEOOM_Kwh.3', 0, 100, 1);
+		}
+		
 
 		if ($this->logLevel >= LogLevel::TRACE) {
 			$this->AddLog(__FUNCTION__, "Profiles registered");
@@ -237,46 +282,37 @@ class Neoom extends IPSModule {
 		$userEnergy_FeedIn = $this->ReadPropertyBoolean("cb_UserEnergyFeedIn");
 		$energyCommunity_Info = $this->ReadPropertyBoolean("cb_EnergyCommunityInfos");
 
-		$categorieRoodId = IPS_GetParent($this->InstanceID);
+		//$categorieRoodId = IPS_GetParent($this->InstanceID);
 
 		if($userEnergy_Consumption) {
 			//$dummyParentId = $this->CreateCategoryByIdent(self::DUMMY_IDENT_userEnergyConsumption, "Meine Energie - Bezug", $categorieRoodId, 100, "");
-		
-			$this->RegisterVariableFloat("ue_consumptionTotal", "Bezug", "", 100);
-			$this->RegisterVariableFloat("ue_consumptionEG", "EG Bezug", "", 101);
-			$this->RegisterVariableFloat("ue_consumptionGrid", "Netzbezug", "", 102);
-			$this->RegisterVariableFloat("ue_consumptionPercent", "Anteil EG Bezug", "", 103);
-
-			$this->RegisterVariableFloat("ue_co2Reduced", "CO2 reduziert", "", 105);
-			$this->RegisterVariableFloat("costsSaved", "Kosten gespart", "", 106);
+			$this->RegisterVariableFloat("user_consumptionTotal", "Bezug", "NEOOM_Kwh.3", 100);
+			$this->RegisterVariableFloat("user_consumptionEG", "EG Bezug", "NEOOM_Kwh.3", 101);
+			$this->RegisterVariableFloat("user_consumptionGrid", "Netzbezug", "NEOOM_Kwh.3", 102);
+			$this->RegisterVariableFloat("user_consumptionPercent", "Anteil EG Bezug", "Percent.2", 103);
 		}
 
 		if($userEnergy_FeedIn) {
 			//$dummyParentId = $this->CreateCategoryByIdent(self::DUMMY_IDENT_userEnergyFeedIn, "Meine Energie - Einspeisung", $categorieRoodId, 110, "");
-		
-			$this->RegisterVariableFloat("ue_feedInTotal", "Einspeisung", "", 110);
-			$this->RegisterVariableFloat("ue_feedInEG", "EG Einspeisung", "", 111);
-			$this->RegisterVariableFloat("ue_feedInGrid", "Netzeinspeisung", "", 112);
-			$this->RegisterVariableFloat("ue_feedInPercent", "Anteil EG Einspeisung", "", 113);
-
-			
-			$this->RegisterVariableFloat("feedInYield", "EG Einspeiseertrag", "", 115);
+			$this->RegisterVariableFloat("user_feedInTotal", "Einspeisung", "NEOOM_Kwh.3", 110);
+			$this->RegisterVariableFloat("user_feedInEG", "EG Einspeisung", "NEOOM_Kwh.3", 111);
+			$this->RegisterVariableFloat("user_feedInGrid", "Netzeinspeisung", "NEOOM_Kwh.3", 112);
+			$this->RegisterVariableFloat("user_feedInPercent", "Anteil EG Einspeisung", "Percent.2", 113);
 		}
+
+		$this->RegisterVariableFloat("user_co2Reduced", "CO2 reduziert", "", 150);
+		$this->RegisterVariableFloat("user_costsSaved", "Kosten gespart", "~Euro", 151);
+		$this->RegisterVariableFloat("user_feedInYield", "EG Einspeiseertrag", "~Euro", 152);
 
 		if($energyCommunity_Info) {
 			//$dummyParentId = $this->CreateCategoryByIdent(self::DUMMY_IDENT_energyCommunity, "Meine EG", $categorieRoodId, 500, "");
-		
-			$this->RegisterVariableFloat("feedInTotal", "Einspeisung", "", 500);
-			$this->RegisterVariableFloat("feedInEG", "EG Einspeisung", "", 510);
-			$this->RegisterVariableFloat("feedInGrid", "Netzeinspeisung", "", 520);
-			$this->RegisterVariableFloat("feedInPercent", "Anteil EG Einspeisung", "", 530);
+			$this->RegisterVariableFloat("eg_energyPrice", "Energie Preis", "CentkWh.2", 200);
+			$this->RegisterVariableInteger("eg_totalMembers", "EG Mitglieder", "", 210);
 		}
 
 		$varId = $this->RegisterVariableInteger("dateTimeQueryTS", "DateTime Query", "~UnixTimestamp", 800);
 		$this->RegisterVariableString("dateTimeQueryInfo", "DateTime Query", "", 801);
-
-		SetValueInteger($varId, 1698364800);
-
+		SetValueInteger($varId, 1698364800);	//EG Start 1698364800 | 27.10.2023
 
 
 		$this->RegisterVariableInteger("updateCntOk", "Request Cnt", "", 900);
@@ -285,8 +321,7 @@ class Neoom extends IPSModule {
 		$this->RegisterVariableString("lastError", "Last Error", "", 911);
 		$this->RegisterVariableInteger("lastErrorTimestamp", "Last Error Timestamp", "~UnixTimestamp", 912);
 
-		$archivInstanzID = IPS_GetInstanceListByModuleID("{43192F0B-135B-4CE7-A0A7-1475603F3060}")[0];
-		IPS_ApplyChanges($archivInstanzID);
+		IPS_ApplyChanges($this->archivInstanzID);
 		if ($this->logLevel >= LogLevel::TRACE) {
 			$this->AddLog(__FUNCTION__, "Variables registered");
 		}

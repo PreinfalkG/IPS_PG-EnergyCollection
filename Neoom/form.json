@@ -9,12 +9,18 @@
             "type": "ValidationTextBox",
             "caption": "Bearer Token",
             "name": "tb_BearerToken"
-        }, 
+        },
         {
             "type": "ValidationTextBox",
             "caption": "Wallet ID",
             "name": "tb_WalletId"
-        },             
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "ns_QueryOffsetUntilNow",
+            "caption": "Abfrage heute minus Tage",
+            "suffix": "Tage"
+        },
         {
             "type": "CheckBox",
             "caption": "Meine Energie - Bezug",
@@ -26,13 +32,13 @@
             "caption": "Meine Energie - Einspeisung",
             "enabled": true,
             "name": "cb_UserEnergyFeedIn"
-        },    
+        },
         {
             "type": "CheckBox",
             "caption": "Infos zur Energiegemeinschaft",
             "enabled": true,
             "name": "cb_EnergyCommunityInfos"
-        },             
+        },
         {
             "name": "LogLevel",
             "type": "Select",
@@ -79,19 +85,24 @@
                     "value": 0
                 }
             ]
-        }      
+        }
     ],
     "actions": [
         {
             "type": "Button",
-            "label": "Update Marketdata",
+            "label": "Request Next Day",
             "onClick": "NEOOM_RequestNextDay($id, 'ModulForm');"
-        },   
+        },
+        {
+            "type": "Button",
+            "label": "Set Start Date to 27.10.2023",
+            "onClick": "NEOOM_SetStartDate($id, 'ModulForm');"
+        },
         {
             "type": "Button",
             "label": "Reaggregate Variables",
             "onClick": "NEOOM_ReAggregateVariables($id, 'ModulForm');"
-        },                                     
+        },
         {
             "type": "Button",
             "caption": "Reset Counter Variables",
