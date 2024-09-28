@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-date_default_timezone_set('UTC');
+//date_default_timezone_set('UTC');
 
 require_once __DIR__ . '/../libs/COMMON.php';
 require_once __DIR__ . '/NEOOM.php';
@@ -129,31 +129,24 @@ class Neoom extends IPSModule {
 
 	public function TimerUpdate_NEOOM() {
 
-		if ($this->logLevel >= LogLevel::INFO) {
+		if ($this->logLevel >= LogLevel::DEBUG) {
 			$this->AddLog(__FUNCTION__, "TimerUpdate_NEOOM called ...", 0 , true);
 		}
 
-		$result = $this->RequestNextDay("TimerUpdate_NEOOM");
+		$result = $this->RequestDay("TimerUpdate_NEOOM", true);
 		if($result === false) {
 
 			if ($this->logLevel >= LogLevel::WARN) {
-				$this->AddLog(__FUNCTION__, "Problem 'RequestNextDay()' > SET 'TimerUpdate_NEOOM' to 120 sec for next try", 0, true);
+				$this->AddLog(__FUNCTION__, "Problem 'RequestDay()' > SET 'TimerUpdate_NEOOM' to 0", 0, true);
 			}
-			$this->SetUpdateInterval($this->timerIntervalSec * 10); 
-
-		} else {
-
-			//if ($this->logLevel >= LogLevel::DEBUG) {
-				//$this->AddLog(__FUNCTION__, sprintf("SET next_timer @%s]", $this->UnixTimestamp2String($next_timer)));
-			//}
-			//$this->SetUpdateInterval($this->timerIntervalSec);
+			$this->SetUpdateInterval(0); 
 
 		}
 	}
 
 
 
-	public function RequestNextDay(string $caller = '?') {
+	public function RequestDay(string $caller = '?', bool $addValuesToArchiv=false) {
 
 		$returnValue = true;
 		
@@ -161,43 +154,61 @@ class Neoom extends IPSModule {
 		$walletId = $this->ReadPropertyString("tb_WalletId");
 
 		$dtQueryFrom = new DateTime('@' . $dateTimeFrom);
+		$dtQueryFrom->setTimezone(new DateTimeZone('Europe/Berlin'));		// Europe/Vienna	-	var_dump($dtQueryFrom->getTimezone());
 
 		$numberOfDaysBack = $this->ReadPropertyInteger("ns_QueryOffsetUntilNow");
 		$modifier = sprintf("-%d days", $numberOfDaysBack);
 		$dtQueryTo = (new DateTime())->modify($modifier);
-		//$dtQueryTo = (new DateTime())->modify('-7 days');		
-		//$dtQueryTo = (new DateTime())->createFromFormat('d/m/Y', '30/10/2023');
-		//$dtQueryTo = (new DateTime())->createFromFormat('d/m/Y\\TH:i:s', '30/10/2023T00:00:00');
-		//$dtQueryTo = new DateTime('@' . time() - 7*24*3600);
 
 		if ($this->logLevel >= LogLevel::DEBUG) {
-			$this->AddLog(__FUNCTION__, sprintf("API RequestNextDay [Trigger > %s] \n - QueryFrom: %s\n - QueryTo: %s [%s]\n - Wallet ID: %s", $caller, $dtQueryFrom->format(DateTime::ATOM), $dtQueryTo->format(DateTime::ATOM), $modifier, $walletId));
+			$this->AddLog(__FUNCTION__, sprintf("API RequestDay [Trigger > %s]\n - QueryFrom [ATOM]: %s\n - QueryTo [ATOM]: %s [modifier: %s]\n - Wallet ID: %s", $caller, $dtQueryFrom->format(DateTime::ATOM), $dtQueryTo->format(DateTime::ATOM), $modifier, $walletId));
 		}
-		
+	
 		if($dtQueryFrom > $dtQueryTo) {
-			$this->HandleError(__FUNCTION__, "dtQueryFrom > dtQueryTo");
-			$returnValue = false;
+			$this->SetUpdateInterval(0); 
+			$this->AddLog(__FUNCTION__, "END :: dtQueryFrom > dtQueryTo", 0, true);
+			$returnValue = true;
 		} else {
 
-			$dtQueryFrom->setTime(2,0,0);
-
 			$dtQueryTo = $dtQueryFrom;
-			$result = $this->QueryUserEnergy($caller, $dtQueryFrom, $dtQueryTo, $walletId);
+			$jsonData = $this->QueryUserEnergy($caller, $dtQueryFrom, $dtQueryTo, $walletId);						// QueryUserEnergy
 
-			if ($this->logLevel >= LogLevel::DEBUG) {
-                $this->AddLog(__FUNCTION__, sprintf("API Response [%s]", print_r($result,true)));
+			if ($this->logLevel >= LogLevel::TEST) {
+                $this->AddLog(__FUNCTION__, sprintf("JSON Data [%s]", print_r($jsonData,true)));
             }
 
-			if($result === false) {
-				$this->HandleError(__FUNCTION__, "RESULT: " . $result);
+			if($jsonData === false) {
+				$this->HandleError(__FUNCTION__, "RESULT: " . $jsonData);
 				$returnValue = false;
 			} else {
-				$returnValue = $this->ExtractAndAddLoggedValues($dtQueryFrom, $result);
-				if($returnValue) {
-					$this->Increase_CounterByIdent("updateCntOk");
-					$dtQueryFrom->modify('+1 day');
-					SetValueInteger($this->GetIDForIdent("dateTimeQueryTS"), $dtQueryFrom->getTimestamp());
+
+				if(isset($jsonData->errors)) {
+
+					if(isset($jsonData->errors[0]->message)) {
+						$errorMsg = $jsonData->errors[0]->message;
+						$this->HandleError(__FUNCTION__, $errorMsg, 0, true);
+					} else {
+						$this->HandleError(__FUNCTION__, "Unknown ERROR", 0, true);
+					}
+					return false;
+
+				} else if(isset($jsonData->data)) {
+
+					$returnValue = $this->ExtractValues($dtQueryFrom, $jsonData, $addValuesToArchiv);					// ExtractValues
+					if($returnValue) {
+						$this->Increase_CounterByIdent("updateCntOk");
+						$dtQueryFrom->modify('+1 day');
+						SetValueInteger($this->GetIDForIdent("dateTimeQueryTS"), $dtQueryFrom->getTimestamp());
+						$dateDetails = sprintf("ATOM: %s | c: %s | %s", $dtQueryFrom->format(DateTime::ATOM), $dtQueryFrom->format('c'), $dtQueryFrom->getTimezone()->getName());
+						SetValueString($this->GetIDForIdent("dateTimeQueryInfo"), $dateDetails);
+					} else {
+						$this->HandleError(__FUNCTION__, "Unknown ERROR in 'ExtractValues'", 0, true);
+					}
+					
+				} else {
+					$this->HandleError(__FUNCTION__, "no 'data' or 'error' Element found in JSON Data", 0, true);
 				}
+
 			}
 		}
 
@@ -207,10 +218,19 @@ class Neoom extends IPSModule {
 
 	public function SetStartDate(string $caller = '?') {
 
-		SetValueInteger($this->GetIDForIdent("dateTimeQueryTS"), 1698364800);	//EG Start 1698364800 | 27.10.2023
-		SetValueString($this->GetIDForIdent("dateTimeQueryInfo"), "-");
+		//$timeStampSTART = strtotime('2023-10-27');	//1698357600; //EG Start 1698357600 | 27.10.2023 00:00:00 GMT+0200 (Mitteleuropäische Sommerzeit)
+		//SetValueInteger($this->GetIDForIdent("dateTimeQueryTS"), $timeStampSTART);	
+		//SetValueString($this->GetIDForIdent("dateTimeQueryInfo"), date('d.m.Y H:i:s', $timeStampSTART));
+
+		$dateStart = new DateTime("2023-10-27 00:00:00");
+		$timeStampSTART = $dateStart->getTimestamp();
+		SetValueInteger($this->GetIDForIdent("dateTimeQueryTS"), $timeStampSTART);	
+		$dateDetails = sprintf("ATOM: %s | c: %s | %s", $dateStart->format(DateTime::ATOM), $dateStart->format('c'), $dateStart->getTimezone()->getName());
+		SetValueString($this->GetIDForIdent("dateTimeQueryInfo"), $dateDetails);
+
+
 		if ($this->logLevel >= LogLevel::INFO) {
-			$this->AddLog(__FUNCTION__, sprintf("Set 'DateTime Query' to %s [Trigger > %s]", $caller, date('d.m.Y H:i:s', 1698364800)));
+			$this->AddLog(__FUNCTION__, sprintf("Set 'DateTime Query' to %s [Trigger > %s]", date('d.m.Y H:i:s', $timeStampSTART), $caller));
 		}
 	}
 
@@ -312,9 +332,7 @@ class Neoom extends IPSModule {
 
 		$varId = $this->RegisterVariableInteger("dateTimeQueryTS", "DateTime Query", "~UnixTimestamp", 800);
 		$this->RegisterVariableString("dateTimeQueryInfo", "DateTime Query", "", 801);
-		SetValueInteger($varId, 1698364800);	//EG Start 1698364800 | 27.10.2023
-
-
+	
 		$this->RegisterVariableInteger("updateCntOk", "Request Cnt", "", 900);
 		$this->RegisterVariableInteger("updateCntNotOk", "Receive Cnt", "", 901);
 		$this->RegisterVariableInteger("errorCnt", "Error Cnt", "", 910);
@@ -336,9 +354,7 @@ class Neoom extends IPSModule {
 		SetValue($this->GetIDForIdent("lastError"), $msg);
 		SetValue($this->GetIDForIdent("lastErrorTimestamp"), time());
 
-		if ($this->logLevel >= LogLevel::ERROR) {
-			$this->AddLog($sender, $msg, 0, true);
-		}
+		$this->AddLog($sender, $msg, 0, true);
 	}
 
 	protected function AddLog($name, $daten, $format = 0, $ipsLogOutput=false) {
