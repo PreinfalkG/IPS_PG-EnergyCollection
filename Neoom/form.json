@@ -90,12 +90,12 @@
     "actions": [
         {
             "type": "Button",
-            "label": "Request Day",
+            "label": "Request Day (ohne AddLoggedValue)",
             "onClick": "NEOOM_RequestDay($id, 'ModulForm', false);"
         },
         {
             "type": "Button",
-            "label": "Process Day",
+            "label": "Process Day (mit AddLoggedValue)",
             "onClick": "NEOOM_RequestDay($id, 'ModulForm', true);"
         },        
         {
@@ -108,6 +108,11 @@
             "label": "Reaggregate Variables",
             "onClick": "NEOOM_ReAggregateVariables($id, 'ModulForm');"
         },
+        {
+            "type": "Button",
+            "label": "DELETE VariableData (from 'dateTimeQueryTS' until NOW)",
+            "onClick": "NEOOM_DeleteVariableData($id, 'ModulForm');"
+        },        
         {
             "type": "Button",
             "caption": "Reset Counter Variables",

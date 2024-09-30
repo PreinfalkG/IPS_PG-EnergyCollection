@@ -235,6 +235,31 @@ class Neoom extends IPSModule {
 	}
 
 
+
+	public function DeleteVariableData(string $caller = '?') {
+
+		$startDateTime = GetValueInteger($this->GetIDForIdent("dateTimeQueryTS"));
+
+		if ($this->logLevel >= LogLevel::WARN) {
+			$this->AddLog(__FUNCTION__, sprintf("DELETE Variable Data from %s until NOW", date('d.m.Y H:i:s', $startDateTime)));
+		}
+
+		$childrenIDs = IPS_GetChildrenIDs($this->InstanceID);
+		foreach($childrenIDs as $varId) {
+			
+			$loggingStatus = AC_GetLoggingStatus($this->archivInstanzID, $varId);
+			if($loggingStatus) {
+				$deletedCnt = AC_DeleteVariableData($this->archivInstanzID, $varId, $startDateTime, 0);
+				IPS_Sleep(25);
+
+				if ($this->logLevel >= LogLevel::INFO) {
+					$this->AddLog(__FUNCTION__, sprintf("%s Datensätze gelöscht: %d [%s] ",  $deletedCnt, $varId, IPS_GetName($varId)));
+				}
+			}
+		}
+	}
+
+
 	public function ReAggregateVariables(string $caller = '?') {
 		$childrenIDs = IPS_GetChildrenIDs($this->InstanceID);
 		foreach($childrenIDs as $varId) {
