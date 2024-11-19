@@ -4,25 +4,47 @@ declare(strict_types=1);
 
 trait AWATTAR_FUNCTIONS {
 
-    protected function RequestMarketdata() {
+    public function RequestMarketdata(int $start=0, int $end=0) {
 
         $apiURL = 'https://api.awattar.at/v1/marketdata';
         $logMsg = sprintf("Request '%s'", $apiURL);
 
-        $nowHour = idate('H');
-        if($nowHour < 14) {
-            
+
+        $duration = $end - $start;
+        if($start == 0) {
+
+            $nowHour = idate('H');
+            if($nowHour < 14) {
+                
+                    $params = [
+                        'start' => (strtotime(date('d.m.Y 24:00:00')) - 3600*24) * 1000
+                    ];
+                    //$paramsTest = [
+                    //    'start' => (strtotime(date('d.m.Y 14:00:00')) - 3600*24) * 1000,
+                    //    'end' => strtotime(date('d.m.Y 14:00:00')) * 1000
+                    //];                
+                    $apiURL .= '?' . http_build_query($params);       
+                    $tsStart = intval($params["start"]/1000);
+                    $logMsg = sprintf("Request '%s' [start: %s ]", $apiURL, $this->UnixTimestamp2String($tsStart));
+            }
+
+        } else {
+            if ($duration > 0) {
+
+                $startRounded = intval(floor($start / 3600) * 3600);
+                $endRounded = intval(ceil($end / 3600) * 3600);
+
                 $params = [
-                    'start' => (strtotime(date('d.m.Y 24:00:00')) - 3600*24) * 1000
+                    'start' => $startRounded * 1000,
+                    'end' => $endRounded * 1000
                 ];
-                //$paramsTest = [
-                //    'start' => (strtotime(date('d.m.Y 14:00:00')) - 3600*24) * 1000,
-                //    'end' => strtotime(date('d.m.Y 14:00:00')) * 1000
-                //];                
+
                 $apiURL .= '?' . http_build_query($params);       
-                $tsStart = intval($params["start"]/1000);
-                $logMsg = sprintf("Request '%s' [start: %s ]", $apiURL, $this->UnixTimestamp2String($tsStart));
+                $logMsg = sprintf("Request '%s' [start: %s | end: %s]", $apiURL, $this->UnixTimestamp2String($startRounded),  $this->UnixTimestamp2String($endRounded));                
+
+            }
         }
+       
 
         if ($this->logLevel >= LogLevel::COMMUNICATION) {
             $this->AddLog(__FUNCTION__, $logMsg);
@@ -133,6 +155,86 @@ trait AWATTAR_FUNCTIONS {
         }
         return $testMarketdataArr;
     }
+
+    public function CalcPriceDetails(int $varId_kWh, int $varId_marketprice=0, int $start=0, int $end=0) {
+
+        $result = false;
+
+        // kleiner 01.01.2020
+        if($start < 1577833200) {
+            if ($this->logLevel >= LogLevel::ERROR) { $this->AddLog(__FUNCTION__, sprintf("Start '%s' ist kleiner als 01.01.2020",  $this->UnixTimestamp2String($start))); }
+            return false;
+        }
+
+        $duration = $end - $start;
+        if($duration <= 3600) {
+            if ($this->logLevel >= LogLevel::ERROR) { $this->AddLog(__FUNCTION__, sprintf("Invalid start or stop time [start: %s | end: %s]",  $this->UnixTimestamp2String($start), $this->UnixTimestamp2String($end))); }
+            return false;
+        }        
+
+
+        $loggingStatus = AC_GetLoggingStatus($this->archivInstanzID, $varId_kWh);
+        if(!$loggingStatus){
+            if ($this->logLevel >= LogLevel::ERROR) { $this->AddLog(__FUNCTION__, sprintf("Variabel '%s' wird nicht geloggt ...", $varId_kWh)); }
+            return false;
+        }
+
+
+        $epexSpotPriceArr = [];
+        if($varId_marketprice == 0) {
+            $jsonMarketdata = $this->RequestMarketdata($start, $end);
+            if ($jsonMarketdata === false) {
+                if ($this->logLevel >= LogLevel::ERROR) { $this->AddLog(__FUNCTION__, "Error on 'RequestMarketdata()' ..."); }
+                return false;
+            } else {
+
+                foreach ($jsonMarketdata as $item) {
+
+                    $epexSpotStart = intval($item['start_timestamp'] / 1000);
+                    //$epexSpotEnd = intval($item['end_timestamp'] / 1000);
+                    $epexSpotPrice = floatval($item['marketprice'] / 10);
+                    $epexSpotPriceArr[$epexSpotStart] = $epexSpotPrice;
+
+                }
+
+
+            }
+        }
+
+
+        $dataArr_kWh = AC_GetAggregatedValues($this->archivInstanzID, $varId_kWh, 0, $start, $end, 0);
+        foreach($dataArr_kWh as $data_kWh) {
+
+            $kWh = $data_kWh["Avg"];
+            $timeStampStart = $data_kWh["TimeStamp"];
+
+            $epexSpotPrice = "n.a.";
+            if(array_key_exists($timeStampStart, $epexSpotPriceArr)){
+                $epexSpotPrice =  $epexSpotPriceArr[$timeStampStart];
+            }
+
+
+            if ($this->logLevel >= LogLevel::DEBUG) { $this->AddLog(__FUNCTION__, sprintf(" - '%s' : %.3f kWh | %s : %.3f Cent", $this->UnixTimestamp2String($timeStampStart), $kWh, $this->UnixTimestamp2String($timeStampStart), $epexSpotPrice)); }
+
+
+            $arrElem = [];
+            $arrElem["TimeStamp"] = $timeStampStart;
+            $arrElem["DateTime"] =$this->UnixTimestamp2String($timeStampStart);      //the start of the aggregation period
+            $arrElem["kWh"] =  $kWh;
+            $arrElem["epexSpotPrice"] = $epexSpotPrice;
+            
+            $result[] = $arrElem;
+
+        }
+
+        //$startRounded = intval(floor($start / 3600) * 3600);
+        //$endRounded = intval(ceil($end / 3600) * 3600);
+
+
+        return $result;
+
+    }
+
 
     protected function CreateMarketdataExtended(array $jsonMarketdata) {
 

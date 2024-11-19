@@ -18,12 +18,15 @@ class aWATTar extends IPSModule {
 	private $logLevel = 4;		// WARN = 3 | INFO = 4
 	private $logCnt = 0;
 	private $enableIPSLogOutput = false;
+	private $archivInstanzID;	
 
 	public $marketdataExtended = [];
 
 	public function __construct($InstanceID) {
 
 		parent::__construct($InstanceID);		// Diese Zeile nicht löschen
+
+		$this->archivInstanzID = IPS_GetInstanceListByModuleID("{43192F0B-135B-4CE7-A0A7-1475603F3060}")[0];
 
 		$this->logLevel = @$this->ReadPropertyInteger("LogLevel");
 		if ($this->logLevel >= LogLevel::TRACE) {
