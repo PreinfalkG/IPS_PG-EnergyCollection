@@ -1,0 +1,15 @@
+{
+    "id": "{4DDA95B9-A1F9-40D5-AF84-C505E92929A8}",
+    "name": "INNOnet",
+    "type": 3,
+    "vendor": "INNOnet",
+    "aliases": [
+        "INNOnet Project",
+        "Netztarif"
+    ],
+    "parentRequirements": [],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "INNOnet",
+    "url": ""
+}
