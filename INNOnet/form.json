@@ -1,11 +1,6 @@
 {
     "elements": [
         {
-            "name": "EnableAutoUpdate",
-            "type": "CheckBox",
-            "caption": "Auto Update"
-        },
-        {
             "type": "ValidationTextBox",
             "caption": "API Key",
             "name": "tb_APIKEY"
@@ -15,93 +10,127 @@
             "caption": "Zaehlpunkt Bezug",
             "name": "tb_ZaehlpunktBezug"
         },
-
-        
+        {
+            "type": "SelectDateTime",
+            "name": "dt_QueryInitStartFrom",
+            "caption": "Inital Start DateTime"
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "Timeseries Tariff-Signal",
+            "expanded": true,
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "caption": "Auto Update 'Timeseries Tariff-Signal'",
+                    "enabled": true,
+                    "name": "cb_TariffSignal_EnableAutoUpdate"
+                },           
+                {
+                    "type": "NumberSpinner",
+                    "name": "ns_TariffSignal_UpdateInterval",
+                    "caption": "Abfrage Interval [Minuten]",
+                    "suffix": "Min"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "ns_TariffSignal_OffsetHours",
+                    "caption": "Abfrage Offset",
+                    "suffix": "Stunden"
+                },
+                {
+                    "type": "CheckBox",
+                    "caption": "INNOnet TariffSignal 'Value'",
+                    "enabled": true,
+                    "name": "cb_TariffSignal_Value"
+                },
+                {
+                    "type": "CheckBox",
+                    "caption": "INNOnet TariffSignal 'Flag",
+                    "enabled": true,
+                    "name": "cb_TariffSignal_Flag"
+                },
+                {
+                    "type": "CheckBox",
+                    "caption": "Sonnenfenster Infos",
+                    "enabled": true,
+                    "name": "cb_TariffSignal_CreateSonnenfensterInfos"
+                }
+            ]
+        },
         {
             "type": "ExpansionPanel",
             "caption": "TimeSeriesCollections SelectedData",
             "expanded": true,
             "items": [
-
-
-        {
-            "type": "CheckBox",
-            "caption": "Update 'Selected Data'",
-            "enabled": true,
-            "name": "cb_SelectedData_Enabled"
+                {
+                    "type": "CheckBox",
+                    "caption": "Auto Update 'Selected Data'",
+                    "enabled": true,
+                    "name": "cb_SelectedData_EnableAutoUpdate"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "ns_SelectedData_QueryHours",
+                    "caption": "Abfrage Interval/Zeitspanne [Stunden]",
+                    "suffix": "Stunden"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "ns_SelectedDataQuery_OffsetDaysUntilNow",
+                    "caption": "Abfrage heute minus Tage",
+                    "suffix": "Tage"
+                },
+                {
+                    "type": "CheckBox",
+                    "caption": "INNOnet Tarif",
+                    "enabled": true,
+                    "name": "cb_SelectedData_InnonetTarif"
+                },
+                {
+                    "type": "CheckBox",
+                    "caption": "aWATTar Energie",
+                    "enabled": true,
+                    "name": "cb_SelectedData_aWATTarEnergy"
+                },
+                {
+                    "type": "CheckBox",
+                    "caption": "aWATTar Fee",
+                    "enabled": true,
+                    "name": "cb_SelectedData_aWATTarFee"
+                },
+                {
+                    "type": "CheckBox",
+                    "caption": "aWATTar VAT",
+                    "enabled": true,
+                    "name": "cb_SelectedData_aWATTarVat"
+                },
+                {
+                    "type": "CheckBox",
+                    "caption": "Tarif Signal",
+                    "enabled": true,
+                    "name": "cb_SelectedData_TariffSignal"
+                },
+                {
+                    "type": "CheckBox",
+                    "caption": "OBIS Lieferung",
+                    "enabled": true,
+                    "name": "cb_SelectedData_obisLieferung"
+                },
+                {
+                    "type": "CheckBox",
+                    "caption": "OBIS Bezug",
+                    "enabled": true,
+                    "name": "cb_SelectedData_obisBezug"
+                },
+                {
+                    "type": "CheckBox",
+                    "caption": "OBIS Gemeinschaftliche-Erzeugung",
+                    "enabled": true,
+                    "name": "cb_SelectedData_obisEnergyCommunity"
+                }
+            ]
         },
-
-        { 
-            "type": "SelectDateTime",
-            "name": "dt_SelectedData_Init", 
-            "caption": "Inital Start DateTime"
-        },
-
-        {
-            "type": "NumberSpinner",
-            "name": "ns_SelectedData_QueryHours",
-            "caption": "Abfrage Interval [Stunden]",
-            "suffix": "Stunden"
-        },
-        {
-            "type": "NumberSpinner",
-            "name": "ns_SelectedDataQuery_OffsetDaysUntilNow",
-            "caption": "Abfrage heute minus Tage",
-            "suffix": "Tage"
-        },
-
-
-        {
-            "type": "CheckBox",
-            "caption": "INNOnet Tarif",
-            "enabled": true,
-            "name": "cb_SelectedData_InnonetTarif"
-        },
-        {
-            "type": "CheckBox",
-            "caption": "aWATTar Energie",
-            "enabled": true,
-            "name": "cb_SelectedData_aWATTarEnergy"
-        },
-        {
-            "type": "CheckBox",
-            "caption": "aWATTar Fee",
-            "enabled": true,
-            "name": "cb_SelectedData_aWATTarFee"
-        },
-        {
-            "type": "CheckBox",
-            "caption": "aWATTar VAT",
-            "enabled": true,
-            "name": "cb_SelectedData_aWATTarVat"
-        },
-        {
-            "type": "CheckBox",
-            "caption": "Tarif Signal",
-            "enabled": true,
-            "name": "cb_SelectedData_TariffSignal"
-        },        
-        {
-            "type": "CheckBox",
-            "caption": "OBIS Lieferung",
-            "enabled": true,
-            "name": "cb_SelectedData_obisLieferung"
-        },  
-        {
-            "type": "CheckBox",
-            "caption": "OBIS Bezug",
-            "enabled": true,
-            "name": "cb_SelectedData_obisBezug"
-        },
-        {
-            "type": "CheckBox",
-            "caption": "OBIS Gemeinschaftliche-Erzeugung",
-            "enabled": true,
-            "name": "cb_SelectedData_obisEnergyCommunity"
-        }
-    ]}
-        
-        ,
         {
             "name": "LogLevel",
             "type": "Select",
@@ -153,14 +182,24 @@
     "actions": [
         {
             "type": "Button",
+            "label": "Update Timeseries Tariff-Signal (mit AddLoggedValue)",
+            "onClick": "INNOnet_TimeSeriesCollection_TariffSignal_UPDATE($id, 'ModulForm', true);"
+        },
+        {
+            "type": "Button",
+            "label": "Update Timeseries Tariff-Signal (ohne AddLoggedValue)",
+            "onClick": "INNOnet_TimeSeriesCollection_TariffSignal_UPDATE($id, 'ModulForm', false);"
+        },
+        {
+            "type": "Button",
             "label": "Update Timeseriescollection-Selecteddata (mit AddLoggedValue)",
             "onClick": "INNOnet_TimeSeriesCollection_SelectedData_UPDATE($id, 'ModulForm', true);"
-        },     
+        },
         {
             "type": "Button",
             "label": "Update Timeseriescollection-Selecteddata (ohne AddLoggedValue)",
             "onClick": "INNOnet_TimeSeriesCollection_SelectedData_UPDATE($id, 'ModulForm', false);"
-        },                 
+        },
         {
             "type": "Button",
             "label": "Reaggregate Variables",
@@ -170,7 +209,7 @@
             "type": "Button",
             "label": "DELETE VariableData (from 'dateTimeQueryTS' until NOW)",
             "onClick": "INNOnet_DeleteVariableData($id, 'ModulForm');"
-        },        
+        },
         {
             "type": "Button",
             "caption": "Reset Counter Variables",

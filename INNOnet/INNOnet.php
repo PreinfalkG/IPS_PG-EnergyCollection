@@ -17,7 +17,6 @@ trait INNOnet_FUNCTIONS {
 
         if ($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("Request API URL '%s' [Trigger: %s", $apiURL, $caller)); }
 
-
         $curlOptions = [
             CURLOPT_TIMEOUT => 28,
             CURLOPT_RETURNTRANSFER => true,
@@ -40,25 +39,30 @@ trait INNOnet_FUNCTIONS {
                 $this->HandleError(__FUNCTION__, $errorMsg, 0, true);
             }
 
+            $httpStatusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            if ($httpStatusCode == 200) {
+                $this->IncreaseCounterVar("httpStatus200");
+                if ($this->logLevel >= LogLevel::COMMUNICATION) {
+                    $this->AddLog(__FUNCTION__, sprintf("OK > httpStatusCode '%s' < %s ", $httpStatusCode, $apiURL));
+                }
+            } else if ($httpStatusCode >= 400) {
+                $httpResponse = false;
+                $this->IncreaseCounterVar("httpStatus400");
+                $errorMsg = sprintf('{ "ERROR" : "httpStatusCode >%s< [%s]" }', $httpStatusCode, $apiURL);
+                $this->HandleError(__FUNCTION__, $errorMsg, 0, true);
+            } else {
+                $this->IncreaseCounterVar("httpStatusOther");
+                $msg = sprintf('{ "WARN" : "httpStatusCode >%s< [%s]" }', $httpStatusCode, $apiURL);
+                if ($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, $msg, 0, true); }
+            }  
+
             if ($this->logLevel >= LogLevel::TEST) {
                 $this->AddLog(__FUNCTION__, sprintf("httpResponse [%s]", print_r($httpResponse,true)));
             }
 
-            $httpStatusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            if ($httpStatusCode >= 400) {
-                $httpResponse = false;
-                $errorMsg = sprintf('{ "ERROR" : "httpStatusCode >%s< [%s]" }', $httpStatusCode, $apiURL);
-                $this->HandleError(__FUNCTION__, $errorMsg, 0, true);
-            } else if ($httpStatusCode != 200) {
-                $msg = sprintf('{ "WARN" : "httpStatusCode >%s< [%s]" }', $httpStatusCode, $apiURL);
-                if ($this->logLevel >= LogLevel::WARN) {
-                    $this->AddLog(__FUNCTION__, $msg, 0, true);
-                }
-            } else if ($this->logLevel >= LogLevel::COMMUNICATION) {
-                $this->AddLog(__FUNCTION__, sprintf("OK > httpStatusCode '%s' < %s ", $httpStatusCode, $apiURL));
-            }
         } catch (Exception $e) {
-             $httpResponse = false;
+            $httpResponse = false;
+            $this->IncreaseCounterVar("RequestApiExeption");
             $errorMsg = sprintf('{ "ERROR" : "Exception > %s [%s] {%s}" }', $e->getMessage(), $e->getCode(), $apiURL);
             $this->HandleError(__FUNCTION__, $errorMsg, 0, true);
         } finally {

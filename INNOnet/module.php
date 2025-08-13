@@ -25,6 +25,9 @@ class INNOnet extends IPSModule {
 	public $local_timezone;
 	public $utc_timezone; 
 
+	public $tariffSignal_TimerInterval;
+	public $selectedData_SecondsAferMidnight;
+
 
 	public function __construct($InstanceID) {
 
@@ -34,6 +37,9 @@ class INNOnet extends IPSModule {
 
 		$this->local_timezone = new DateTimeZone('Europe/Vienna');
 		$this->utc_timezone = new DateTimeZone('UTC');
+
+		$this->tariffSignal_TimerInterval = 15*60;
+		$this->selectedData_SecondsAferMidnight = 16*3600 + 5;
 
 		$this->logLevel = @$this->ReadPropertyInteger("LogLevel");
 		if ($this->logLevel >= LogLevel::TRACE) {
@@ -57,18 +63,25 @@ class INNOnet extends IPSModule {
 		}
 		IPS_LogMessage(__CLASS__ . "_" . __FUNCTION__, $logMsg);
 
-		$this->RegisterPropertyBoolean("EnableAutoUpdate", false);
+	
 		$this->RegisterPropertyInteger("LogLevel", LogLevel::INFO);
 
 		//$this->RegisterPropertyInteger("sTD_StartDateTime", 0);
 		$this->RegisterPropertyString("tb_APIKEY", "48befc1b-37bd-4199-bc02-d841b2048ae4");
 		$this->RegisterPropertyString("tb_ZaehlpunktBezug", "AT0031000000000000000000990048744");
+		//$this->RegisterPropertyString("dt_QueryInitStartFrom", '{"day":01,"month":08,"year":2025,"hour":0,"minute":0,"second":0}');
+		$this->RegisterPropertyString("dt_QueryInitStartFrom", "");
 
-		$this->RegisterPropertyString("dt_SelectedData_Init", '{"day":01,"month":08,"year":2025,"hour":0,"minute":0,"second":0}');
+		$this->RegisterPropertyBoolean("cb_TariffSignal_EnableAutoUpdate", false);
+		$this->RegisterPropertyInteger("ns_TariffSignal_UpdateInterval", 15);
+		$this->RegisterPropertyInteger("ns_TariffSignal_OffsetHours", 24);
+		$this->RegisterPropertyBoolean("cb_TariffSignal_Value", false);
+		$this->RegisterPropertyBoolean("cb_TariffSignal_Flag", false);
+		$this->RegisterPropertyBoolean("cb_TariffSignal_CreateSonnenfensterInfos", false);
+
+		$this->RegisterPropertyBoolean("cb_SelectedData_EnableAutoUpdate", false);
 		$this->RegisterPropertyInteger("ns_SelectedData_QueryHours", 24);
 		$this->RegisterPropertyInteger("ns_SelectedDataQuery_OffsetDaysUntilNow", 2);
-
-		$this->RegisterPropertyBoolean("cb_SelectedData_Enabled", false);
 		$this->RegisterPropertyBoolean("cb_SelectedData_InnonetTarif", false);
 		$this->RegisterPropertyBoolean("cb_SelectedData_aWATTarEnergy", false);
 		$this->RegisterPropertyBoolean("cb_SelectedData_aWATTarFee", false);		
@@ -78,8 +91,8 @@ class INNOnet extends IPSModule {
 		$this->RegisterPropertyBoolean("cb_SelectedData_obisBezug", false);	
 		$this->RegisterPropertyBoolean("cb_SelectedData_obisEnergyCommunity", false);	
 
-		$this->RegisterTimer('TimerNextRequest_INNOnet', 0, 'INNOnet_TimerNextRequest_INNOnet('.$this->InstanceID.');');
-		$this->RegisterTimer('TimerNextAutoUpdate_INNOnet', 0, 'INNOnet_TimerNextAutoUpdate_INNOnet($_IPS["TARGET"]);');
+		$this->RegisterTimer('TimerTariffSignal_INNOnet', 0, 'INNOnet_TimerTariffSignal_INNOnet('.$this->InstanceID.');');
+		$this->RegisterTimer('TimerSelectedData_INNOnet', 0, 'INNOnet_TimerSelectedData_INNOnet($_IPS["TARGET"]);');
 
 		$this->RegisterMessage(0, IPS_KERNELMESSAGE);
 	}
@@ -96,8 +109,10 @@ class INNOnet extends IPSModule {
 
 		if($Message == IPS_KERNELMESSAGE) {
 			if ($Data[0] == KR_READY ) {
-				$this->AddLog(__FUNCTION__, "Set Initial Interval for 'TimerNextRequest_INNOnet' to 30 seconds", 0, true); 
-				$this->SetUpdateInterval(5);
+				$this->AddLog(__FUNCTION__, "Set Initial Interval for 'TimerTariffSignal_INNOnet' to 60 Sec", 0, true); 
+				$this->SetTimerTariffSignal(60);
+				$this->AddLog(__FUNCTION__, "Set Initial Interval for 'TimerSelectedData_INNOnet' to 300 Sec", 0, true); 
+				$this->SetTimerSelectedData(300, 0);
 			}
 		}
 	}
@@ -115,34 +130,28 @@ class INNOnet extends IPSModule {
 		$this->RegisterProfiles();
 		$this->RegisterVariables();
 
-		$this->SetTimerNextRequest(0);
-		$autoUpdate = $this->ReadPropertyBoolean("EnableAutoUpdate");
-		if ($autoUpdate) {
-			$next_timer = strtotime(date('Y-m-d H:00:10', strtotime('+1 hour')));
-			if ($this->logLevel >= LogLevel::INFO) {
-				$this->AddLog(__FUNCTION__, sprintf("SET next_timer @%s]", $this->UnixTimestamp2String($next_timer)));
-			}
-			$this->SetTimerNextAutoUpdate(16*3600 + 5);
-		} else {
-			$this->SetTimerNextAutoUpdate(0);
-		}
+		$this->SetTimerTariffSignal(5);
+		$this->SetTimerSelectedData(30, 0);
 	}
 
 
-	public function SetTimerNextRequest(int $timerInterval) {
-		if ($timerInterval < 1) {
-			if ($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "'TimerNextRequest_INNOnet' stopped [TimerIntervall = 0]"); }
-			$this->SetTimerInterval("TimerNextRequest_INNOnet", $timerInterval * 1000);
-		} else {
-			if ($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, sprintf("Set 'TimerNextRequest_INNOnet' Interval to %s sec", $timerInterval)); }
-			$this->SetTimerInterval("TimerNextRequest_INNOnet", $timerInterval * 1000);
-		}
+	public function SetTimerTariffSignal(int $timerInterval) {
 
+		if ($timerInterval < 1) {
+			if ($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "'TimerTariffSignal_INNOnet' stopped [TimerIntervall = 0]"); }
+			$this->SetTimerInterval("TimerTariffSignal_INNOnet", 0);
+		} else {
+			if ($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, sprintf("Set 'TimerTariffSignal_INNOnet' Interval to %s sec", $timerInterval)); }
+			$this->SetTimerInterval("TimerTariffSignal_INNOnet", $timerInterval * 1000);
+		}
 	}
 	
-	public function SetTimerNextAutoUpdate(int $secondsAferMidnight=0) {
+	public function SetTimerSelectedData(int $timerNextInterval=0, int $secondsAferMidnight=0) {
 
-		if($secondsAferMidnight > 0) {
+		if($timerNextInterval > 0) {
+			if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, sprintf("Set 'TimerSelectedData_INNOnet' for '%s' to %s sec", $this->InstanceID, $timerNextInterval)); }
+			$this->SetTimerInterval("TimerSelectedData_INNOnet", $timerNextInterval*1000);
+		} else if($secondsAferMidnight >= 0) {
 			$timerDateTime = 0;
 			$seconds_since_midnight  = time() - strtotime('today midnight');
 
@@ -153,64 +162,337 @@ class INNOnet extends IPSModule {
 			} else {
 				$timerDateTime = strtotime('today midnight') + $secondsAferMidnight;
 			}
-			
+		
 			$diff = $timerDateTime - time();
 			$interval = $diff * 1000;	
-			$logMsg = sprintf("Set 'TimerNextAutoUpdate' for '%s' to %s [Interval: %s ms]", $this->InstanceID, date('d.m.Y H:i:s', $timerDateTime), $interval);
+			$logMsg = sprintf("Set 'TimerSelectedData_INNOnet' for '%s' to %s [Interval: %s ms]", $this->InstanceID, date('d.m.Y H:i:s', $timerDateTime), $interval);
 			if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, $logMsg); }
 			IPS_LogMessage(__CLASS__."_".__FUNCTION__, $logMsg);			
-			$this->SetTimerInterval("TimerNextAutoUpdate_INNOnet", $interval);
+			$this->SetTimerInterval("TimerSelectedData_INNOnet", $interval);
+
 		} else {
-			if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, sprintf("Set 'TimerNextAutoUpdate' for '%s' to 0", $this->InstanceID)); }
-			$this->SetTimerInterval("TimerNextAutoUpdate_INNOnet", 0);
-		}
+			if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, sprintf("Disable 'TimerSelectedData_INNOnet' for '%s' [Interval=0}", $this->InstanceID)); }
+			$this->SetTimerInterval("TimerSelectedData_INNOnet", 0);
+		}			
+
 	}
 
 
-	public function TimerNextRequest_INNOnet() {
+	public function TimerTariffSignal_INNOnet() {
+		if ($this->logLevel >= LogLevel::DEBUG) { $this->AddLog(__FUNCTION__, "'TimerTariffSignal_INNOnet' called -> Update API Data 'TariffSignal' ...", 0 , true); }
 
-		if ($this->logLevel >= LogLevel::DEBUG) { $this->AddLog(__FUNCTION__, "'TimerNextRequest_INNOnet' called ...", 0 , true); }
-
-		$this->TimeSeriesCollection_SelectedData_UPDATE(__FUNCTION__, true);
-
-		//$this->SetTimerNextRequest(8);
-
-		/*$result = $this->RequestDay("TimerNextRequest_INNOnet", true);
-		$result = false;
-		if($result === false) {
-
-			if ($this->logLevel >= LogLevel::WARN) {
-				$this->AddLog(__FUNCTION__, "Problem 'RequestDay()' > SET 'TimerNextRequest_INNOnet' to 0", 0, true);	
+		$tariffSignal_AutoUpdate = $this->ReadPropertyBoolean("cb_TariffSignal_EnableAutoUpdate");
+		if ($tariffSignal_AutoUpdate) {
+					
+			$result = $this->TimeSeriesCollection_TariffSignal_UPDATE(__FUNCTION__, true);
+			
+			if($result < 0) {
+				if($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "WARN: 'TimeSeriesCollection_TariffSignal_UPDATE' faild > try again in an hour"); }
+				$this->SetTimerTariffSignal(3600);
+			} else if ($result > 0) {
+				if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "'TimeSeriesCollection_TariffSignal_UPDATE' > More Data available"); }
+				$this->SetTimerTariffSignal(4);
+			} else {
+				if($this->logLevel >= LogLevel::DEBUG) { $this->AddLog(__FUNCTION__, "'TimeSeriesCollection_TariffSignal_UPDATE' > No More Data available"); }
+				$this->SetTimerTariffSignal($this->tariffSignal_TimerInterval);
 			}
-			$this->SetUpdateInterval(0); 
 
+		} else {
+			if ($this->logLevel >= LogLevel::TRACE) { $this->AddLog(__FUNCTION__, sprintf("TariffSignal_EnableAutoUpdate Disabled -> SetTimerTariffSignal to default [%s sec]", $this->tariffSignal_TimerInterval)); }
+			$this->SetTimerTariffSignal($this->tariffSignal_TimerInterval);
 		}
-		*/
+
 	}
 
-	public function TimerNextAutoUpdate_INNOnet() {
-		if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "SetTimerNextAutoUpdate occurred > Update 'API Data' ..."); }
-		$this->SetTimerNextAutoUpdate();
+	public function TimerSelectedData_INNOnet() {
+		if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "TimerSelectedData_INNOnet called -> Update API Data 'SelectedData' ..."); }
+		
+		$autoUpdate = $this->ReadPropertyBoolean("cb_SelectedData_EnableAutoUpdate");
+		if($autoUpdate) {
 
-		//$this->RequestBeConnectAppData1("via Midnight Timer");
+			$result = $this->TimeSeriesCollection_SelectedData_UPDATE(__FUNCTION__, true);
+			
+			if($result < 0) {
+				if($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "WARN: 'TimeSeriesCollection_SelectedData_UPDATE' faild > try again in an hour"); }
+				$this->SetTimerSelectedData(3600, 0);
+			} else if ($result > 0) {
+				if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "'TimeSeriesCollection_SelectedData_UPDATE' > More Data available"); }
+				$this->SetTimerSelectedData(4, 0);
+			} else {
+				if($this->logLevel >= LogLevel::DEBUG) { $this->AddLog(__FUNCTION__, "'TimeSeriesCollection_SelectedData_UPDATE' > No More Data available"); }
+				$this->SetTimerSelectedData(0, $this->selectedData_SecondsAferMidnight);
+			}
+		} else {
+			if ($this->logLevel >= LogLevel::TRACE) { $this->AddLog(__FUNCTION__, sprintf("SelectedData_EnableAutoUpdate Disabled -> SetTimerSelectedData to default [%s sec]", $this->selectedData_SecondsAferMidnight)); }
+			$this->SetTimerSelectedData(0, $this->selectedData_SecondsAferMidnight);
+		}
 	}
 
+	public function TimeSeriesCollection_TariffSignal_UPDATE(string $caller = '?', bool $addValuesToArchiv=false){
+		
+		$returnValue = -1;
 
-	public function TimeSeriesCollection_SelectedData_UPDATE(string $caller = '?', bool $addValuesToArchiv=false){
-
-
-		$result = true;
-
-		$dateTimeFrom =	GetValueInteger($this->GetIDForIdent("selData_QueryStartDateTime"));
+		$dateTimeFrom =	GetValueInteger($this->GetIDForIdent("tariffSignal_QueryStartTS"));
 		if($dateTimeFrom < 3600) {
 
-	        $jsonString = $this->ReadPropertyString('dt_SelectedData_Init');
+	        $jsonString = $this->ReadPropertyString('dt_QueryInitStartFrom');
 	        $dateTimeData = json_decode($jsonString, true);
 
 			if ($dateTimeData && $dateTimeData['year'] > 0) {
 				// Unix-Timestamp erstellen
 				$dateTimeFrom = mktime( $dateTimeData['hour'], $dateTimeData['minute'], $dateTimeData['second'], $dateTimeData['month'], $dateTimeData['day'], $dateTimeData['year'] );
-				SetValueInteger($this->GetIDForIdent("selData_QueryStartDateTime"), $dateTimeFrom);
+				SetValueInteger($this->GetIDForIdent("tariffSignal_QueryStartTS"), $dateTimeFrom);
+			}
+		} 
+
+		$queryFrom = new DateTimeImmutable('@' . $dateTimeFrom);
+		$queryFrom->setTimezone(new DateTimeZone('Europe/Vienna'));
+
+		$queryHours = $this->ReadPropertyInteger("ns_TariffSignal_OffsetHours");
+		$queryTo = $queryFrom->add(new DateInterval(sprintf('PT%sH', $queryHours)));
+
+		//$numberOfDaysBack = $this->ReadPropertyInteger("ns_SelectedDataQuery_OffsetDaysUntilNow");
+		//$modifier = sprintf("-%d days", $numberOfDaysBack);
+		//$queryExitDate = (new DateTime())->modify($modifier);
+
+		$queryExitDate = new DateTime('tomorrow +1 day midnight');
+
+		if($queryTo >= $queryExitDate) {
+			$this->SetTimerSelectedData(0, 16*3600); 
+			$this->AddLog(__FUNCTION__, "END :: queryTo >= queryExitDate", 0, true);
+			$returnValue = 0;
+		} else {
+
+			if ($this->logLevel >= LogLevel::DEBUG) {
+				$this->AddLog(__FUNCTION__, sprintf("TariffSignal API Request [Trigger > %s]\n - QueryFrom [ATOM]: %s\n - QueryTo [ATOM]: %s [queryExitDate: %s]\n", $caller, $queryFrom->format(DateTime::ATOM), $queryTo->format(DateTime::ATOM), $queryExitDate->format(DateTime::ATOM)));
+			} 
+
+			$result = $this->TimeSeriesCollection_TariffSignal($queryFrom, $queryTo, __FUNCTION__, $addValuesToArchiv);
+
+			if($result === true) {
+				$this->IncreaseCounterVar("TariffSignal_Ok");
+				//SetValueInteger($this->GetIDForIdent("tariffSignal_QueryStartTS"), $queryTo->getTimestamp());
+				$returnValue = 1;
+			} else {
+				$this->IncreaseCounterVar("TariffSignal_NotOk");
+				$returnValue = -1;
+			}	
+
+		}
+		return $returnValue;
+
+		
+		return 0;
+	}
+
+	public function TimeSeriesCollection_TariffSignal(?DateTimeImmutable $fromDateTime=null, ?DateTimeImmutable $toDateTime=null, string $caller = '?', bool $addValuesToArchiv=false) {
+
+		$resultOk = true;
+
+		if(is_null($fromDateTime)) { 
+			$fromDateTime =  new DateTimeImmutable('first day of last month');
+			$fromDateTime = $fromDateTime->setTimezone($this->local_timezone);
+			$fromDateTime = $fromDateTime->setTime(0, 0, 0);
+			$toDateTime = $fromDateTime->setTime(23, 59, 59);
+
+			if ($this->logLevel >= LogLevel::TRACE) {
+				$this->AddLog(__FUNCTION__, sprintf("fromDateTime: %s | toDateTime: %s", $fromDateTime->format('Y-m-d H:i:s T'), $toDateTime->format('Y-m-d H:i:s T')));
+			}
+		}
+
+		//$jsonfilePath = IPS_GetKernelDir() . 'logs\INNOnet.json';
+
+		try{
+			$apiKey = $this->ReadPropertyString("tb_APIKEY");
+			$zaehlpunktBezug = $this->ReadPropertyString("tb_ZaehlpunktBezug");
+			$queryFromParameter = $fromDateTime->setTimezone($this->utc_timezone)->format('Y-m-d\TH:i:s\Z');
+			$queryToParameter = $toDateTime->setTimezone($this->utc_timezone)->format('Y-m-d\TH:i:s\Z');
+			$apiUrlTariffSignal = sprintf("https://app-innonnetwebtsm-dev.azurewebsites.net/api/extensions/timeseriesauthorization/repositories/INNOnet-prod/apikey/%s/timeseries/tariff-signal-%s/data?from=%s&to=%s", $apiKey, $zaehlpunktBezug, $queryFromParameter, $queryToParameter);
+
+			$dataArr = null;
+			if(false) {
+				if ($this->logLevel >= LogLevel::TRACE) { $this->AddLog(__FUNCTION__, sprintf("JSON File Path: %s ", $jsonfilePath)); }
+				$json = file_get_contents($jsonfilePath);
+				$dataArr = json_decode($json, true); 
+				if ($dataArr === null) {
+					if ($this->logLevel >= LogLevel::ERROR) { $this->AddLog(__FUNCTION__, "Fehler beim Dekodieren der JSON-Datei."); }
+					$resultOk = false;
+				}
+			} else {
+				$responseData = $this->RequestAPI(__FUNCTION__, $apiUrlTariffSignal);
+				if($responseData === false) {
+					$resultOk = false;
+				} else {
+					$dataArr = json_decode($responseData, true); 
+					if ($dataArr === null) {
+						if ($this->logLevel >= LogLevel::ERROR) { $this->AddLog(__FUNCTION__, "Fehler beim Dekodieren der JSON-Datei."); }
+						$resultOk = false;
+					}				
+				}
+			}
+
+			if($resultOk) {
+
+				if(array_key_exists("Data", $dataArr)) {
+
+					$lastDataRecordTS=0;
+					$elemDataCnt = count($dataArr['Data']);
+					$this->AddLog(__FUNCTION__, sprintf("'TariffSignal' enthält %d Elemente", $elemDataCnt));
+
+					$arrIpsArchiv_Value = [];
+					$arrIpsArchiv_Flag = [];
+                    $arrIpsArchiv_ValueWithOffset = [];
+                    $arrIpsArchiv_FlagWithOffset = [];    
+
+					$dateTimeNow = new DateTimeImmutable('now', $this->local_timezone);
+					$heute_start = new DateTime('today', $this->local_timezone);
+        			$morgen_start = new DateTime('tomorrow', $this->local_timezone);
+        			$uebermorgen_start = new DateTime('tomorrow +1 day', $this->local_timezone);
+
+					$count_heute = 0;
+					$count_morgen = 0;
+
+					foreach($dataArr['Data'] as $dataItem) {
+						$from = new DateTimeImmutable($dataItem['From']);
+						$from = $from->setTimezone($this->local_timezone);
+						$value = boolval($dataItem["Value"]); 
+						$flag = intval($dataItem["Flag"]); 
+
+						if($from <= $dateTimeNow) {
+							$arrIpsArchiv_Value[] = ['TimeStamp' => $from->getTimestamp(), 'Value' => $value];
+							$arrIpsArchiv_Flag[] = ['TimeStamp' => $from->getTimestamp(), 'Value' => $flag];
+							$lastDataRecordTS = $from->getTimestamp()+1800;
+						}
+
+                        $fromWithOffset = $from->modify('-2 days');
+                        if($fromWithOffset < $dateTimeNow) {
+                            $arrIpsArchiv_ValueWithOffset[] = ['TimeStamp' => $fromWithOffset->getTimestamp(), 'Value' => $value];
+                            $arrIpsArchiv_FlagWithOffset[] = ['TimeStamp' => $fromWithOffset->getTimestamp(), 'Value' => $flag];
+                        } else {
+							if($this->logLevel >= LogLevel::WARN) {  $this->AddLog(__FUNCTION__, sprintf("WARN: Skip Adding 'AC_AddLoggedValues' (From: %s > NOW)", $fromWithOffset->format('Y-m-d H:i:s T'))); }
+                        }
+
+                     	if ($value) {
+                            if ($from >= $heute_start && $from < $morgen_start) {
+                                $count_heute++;
+                            } else if ($from >= $morgen_start && $from < $uebermorgen_start) {
+                                $count_morgen++;
+                            }
+                        }						
+
+					}
+
+					
+					if($addValuesToArchiv) { 
+
+
+						if($this->ReadPropertyBoolean("cb_TariffSignal_Value")) {
+
+							$varIdent = "tariffSignal_Value";
+							$varId = $this->GetIDForIdent($varIdent);
+							if($varId !== false) {
+								$result = AC_AddLoggedValues($this->archivInstanzID, $varId, $arrIpsArchiv_Value); 
+								if($result) {
+									if($this->logLevel >= LogLevel::INFO) {  $this->AddLog(__FUNCTION__, sprintf("AC_AddLoggedValues %d Entries added for VarIdent '%s' [%d]", count($arrIpsArchiv_Value), $varIdent, $varId)); }
+								} else {
+									if($this->logLevel >= LogLevel::ERROR) {  $this->AddLog(__FUNCTION__, sprintf("ERROR on AC_AddLoggedValues for VarIdent '%s'", $varIdent)); }
+								}
+							} else {
+								if($this->logLevel >= LogLevel::ERROR) { $this->AddLog(__FUNCTION__, sprintf("Variable with Ident '%s' not found", $varIdent)); }			
+							}	
+							
+							$varIdent = "tariffSignal_Value2";
+							$varId = $this->GetIDForIdent($varIdent);
+							if($varId !== false) {
+								$result = AC_AddLoggedValues($this->archivInstanzID, $varId, $arrIpsArchiv_ValueWithOffset); 
+								if($result) {
+									if($this->logLevel >= LogLevel::INFO) {  $this->AddLog(__FUNCTION__, sprintf("AC_AddLoggedValues %d Entries added for VarIdent '%s' [%d]", count($arrIpsArchiv_ValueWithOffset), $varIdent, $varId)); }
+								} else {
+									if($this->logLevel >= LogLevel::ERROR) {  $this->AddLog(__FUNCTION__, sprintf("ERROR on AC_AddLoggedValues for VarIdent '%s'", $varIdent)); }
+								}
+							} else {
+								if($this->logLevel >= LogLevel::ERROR) { $this->AddLog(__FUNCTION__, sprintf("Variable with Ident '%s' not found", $varIdent)); }			
+							}								
+
+						} else {
+							if($this->logLevel >= LogLevel::ERROR) {  $this->AddLog(__FUNCTION__, "AddValuesToArchiv disabled"); }
+						}
+
+						
+						if($this->ReadPropertyBoolean("cb_TariffSignal_Flag")) {
+							$varIdent = "tariffSignal_Flag";
+							$varId = $this->GetIDForIdent($varIdent);
+							if($varId !== false) {
+								$result = AC_AddLoggedValues($this->archivInstanzID, $varId, $arrIpsArchiv_Flag); 
+								if($result) {
+									if($this->logLevel >= LogLevel::INFO) {  $this->AddLog(__FUNCTION__, sprintf("AC_AddLoggedValues %d Entries added for VarIdent '%s' [%d]", count($arrIpsArchiv_Value), $varIdent, $varId)); }
+								} else {
+									if($this->logLevel >= LogLevel::ERROR) {  $this->AddLog(__FUNCTION__, sprintf("ERROR on AC_AddLoggedValues for VarIdent '%s'", $varIdent)); }
+								}
+							} else {
+								if($this->logLevel >= LogLevel::ERROR) { $this->AddLog(__FUNCTION__, sprintf("Variable with Ident '%s' not found", $varIdent)); }			
+							}
+
+							$varIdent = "tariffSignal_Flag2";
+							$varId = $this->GetIDForIdent($varIdent);
+							if($varId !== false) {
+								$result = AC_AddLoggedValues($this->archivInstanzID, $varId, $arrIpsArchiv_FlagWithOffset); 
+								if($result) {
+									if($this->logLevel >= LogLevel::INFO) {  $this->AddLog(__FUNCTION__, sprintf("AC_AddLoggedValues %d Entries added for VarIdent '%s' [%d]", count($arrIpsArchiv_Value), $varIdent, $varId)); }
+								} else {
+									if($this->logLevel >= LogLevel::ERROR) {  $this->AddLog(__FUNCTION__, sprintf("ERROR on AC_AddLoggedValues for VarIdent '%s'", $varIdent)); }
+								}
+							} else {
+								if($this->logLevel >= LogLevel::ERROR) { $this->AddLog(__FUNCTION__, sprintf("Variable with Ident '%s' not found", $varIdent)); }			
+							}
+
+						} else {
+							if($this->logLevel >= LogLevel::ERROR) {  $this->AddLog(__FUNCTION__, "AddValuesToArchiv disabled"); }
+						}
+
+						
+						if($this->ReadPropertyBoolean("cb_TariffSignal_CreateSonnenfensterInfos")) {
+							SetValueInteger($this->GetIDForIdent("duration_SonnenfesterToday"), $count_heute*1800);  
+							SetValueInteger($this->GetIDForIdent("duration_sonnenfesterTomorrow"), $count_morgen*1800);  
+						}
+					}
+					if($lastDataRecordTS > 0) {
+						SetValueInteger($this->GetIDForIdent("tariffSignal_QueryStartTS"), $lastDataRecordTS);
+					}
+
+				} else {
+					if ($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "DataArr Entry has no 'Data' Element"); }
+				}
+		
+			}
+
+
+		} catch (Exception $e) {
+			$resultOk = false;
+			if ($this->logLevel >= LogLevel::ERROR) {
+				$this->AddLog(__FUNCTION__,"Ein Fehler ist aufgetreten: " . $e->getMessage());
+			}
+		}
+
+		return $resultOk;
+	}
+
+
+
+	public function TimeSeriesCollection_SelectedData_UPDATE(string $caller = '?', bool $addValuesToArchiv=false){
+
+		$returnValue = -1;
+
+		$dateTimeFrom =	GetValueInteger($this->GetIDForIdent("selData_QueryStartTS"));
+		if($dateTimeFrom < 3600) {
+
+	        $jsonString = $this->ReadPropertyString('dt_QueryInitStartFrom');
+	        $dateTimeData = json_decode($jsonString, true);
+
+			if ($dateTimeData && $dateTimeData['year'] > 0) {
+				// Unix-Timestamp erstellen
+				$dateTimeFrom = mktime( $dateTimeData['hour'], $dateTimeData['minute'], $dateTimeData['second'], $dateTimeData['month'], $dateTimeData['day'], $dateTimeData['year'] );
+				SetValueInteger($this->GetIDForIdent("selData_QueryStartTS"), $dateTimeFrom);
 			}
 		} 
 
@@ -220,16 +502,15 @@ class INNOnet extends IPSModule {
 		$queryHours = $this->ReadPropertyInteger("ns_SelectedData_QueryHours");
 		$queryTo = $queryFrom->add(new DateInterval(sprintf('PT%sH', $queryHours)));
 
-
 		$numberOfDaysBack = $this->ReadPropertyInteger("ns_SelectedDataQuery_OffsetDaysUntilNow");
 		$modifier = sprintf("-%d days", $numberOfDaysBack);
 		$queryExitDate = (new DateTime())->modify($modifier);
 
 
 		if($queryTo >= $queryExitDate) {
-			$this->SetTimerNextRequest(0); 
+			$this->SetTimerSelectedData(0, 16*3600); 
 			$this->AddLog(__FUNCTION__, "END :: queryTo >= queryExitDate", 0, true);
-			$result = true;
+			$returnValue = 0;
 		} else {
 
 			if ($this->logLevel >= LogLevel::DEBUG) {
@@ -239,19 +520,16 @@ class INNOnet extends IPSModule {
 			$result = $this->TimeSeriesCollection_SelectedData($queryFrom, $queryTo, __FUNCTION__, $addValuesToArchiv);
 
 			if($result === true) {
-				$this->IncreaseCounterVar("updateCntOk");
-				SetValueInteger($this->GetIDForIdent("selData_QueryStartDateTime"), $queryTo->getTimestamp());
-				$autoUpdate = $this->ReadPropertyBoolean("EnableAutoUpdate");
-				if($autoUpdate) {
-					$this->SetTimerNextRequest(4);
-				}
+				$this->IncreaseCounterVar("SelectedData_Ok");
+				SetValueInteger($this->GetIDForIdent("selData_QueryStartTS"), $queryTo->getTimestamp());
+				$returnValue = 1;
 			} else {
-				$this->IncreaseCounterVar("updateCntNotOk");
-				$this->SetTimerNextRequest(0);
+				$this->IncreaseCounterVar("SelectedData_NotOk");
+				$returnValue = -1;
 			}
 
 		}
-		return $result;
+		return $returnValue;
 	}
 
 	public function TimeSeriesCollection_SelectedData(?DateTimeImmutable $fromDateTime=null, ?DateTimeImmutable $toDateTime=null, string $caller = '?', bool $addValuesToArchiv=false) {
@@ -269,7 +547,7 @@ class INNOnet extends IPSModule {
 			}
 		}
 
-		$jsonfilePath = IPS_GetKernelDir() . 'logs\INNOnet.json';
+		//$jsonfilePath = IPS_GetKernelDir() . 'logs\INNOnet.json';
 
 		try{
 			$apiKey = $this->ReadPropertyString("tb_APIKEY");
@@ -377,7 +655,7 @@ class INNOnet extends IPSModule {
 		return $resultOk;
 	}
 
-	public function TimeSeriesCollection_SelectedData_ExtractValues(array $dataArrElem, string $elemNameShort, $varIdent, float $factor, bool $addValuesToArchiv = false)	{
+	public function TimeSeriesCollection_SelectedData_ExtractValues(array $dataArrElem, string $elemNameShort, string $varIdent, float $factor, bool $addValuesToArchiv = false)	{
 		
 		$arrIpsArchiv = [];
 
@@ -457,11 +735,22 @@ class INNOnet extends IPSModule {
 			$this->AddLog(__FUNCTION__, sprintf("ResetCounterVariables [Trigger > %s] ...", $caller));
 		}
 
-		SetValue($this->GetIDForIdent("updateCntOk"), 0);
-		SetValue($this->GetIDForIdent("updateCntNotOk"), 0);
+		SetValue($this->GetIDForIdent("dateTimeQueryTS"), 0);
+
+		SetValue($this->GetIDForIdent("TariffSignal_Ok"), 0);
+		SetValue($this->GetIDForIdent("TariffSignal_NotOk"), 0);
+		SetValue($this->GetIDForIdent("SelectedData_Ok"), 0);
+		SetValue($this->GetIDForIdent("SelectedData_NotOk"), 0);
+
+		SetValue($this->GetIDForIdent("httpStatus200"), 0);
+		SetValue($this->GetIDForIdent("httpStatus400"), 0);
+		SetValue($this->GetIDForIdent("httpStatusOther"), 0);
+		SetValue($this->GetIDForIdent("RequestApiExeption"), 0);
+
 		SetValue($this->GetIDForIdent("errorCnt"), 0);
 		SetValue($this->GetIDForIdent("lastError"), "-");
 		SetValue($this->GetIDForIdent("lastErrorTimestamp"), 0);
+
 	}
 
 
@@ -496,6 +785,44 @@ class INNOnet extends IPSModule {
 
 	protected function RegisterVariables() {
 
+		$this->RegisterVariableInteger("tariffSignal_QueryStartTS", "TariffSignal Query-Start-DateTime", "~UnixTimestamp", 100);
+
+
+		if($this->ReadPropertyBoolean("cb_TariffSignal_Value")) {
+			$var_Id = $this->RegisterVariableBoolean("tariffSignal_Value", "Tariff Signal", "", 110);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}
+			$var_Id = $this->RegisterVariableBoolean("tariffSignal_Value2", "Tariff Signal -48h", "", 120);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}			
+		}	
+		if($this->ReadPropertyBoolean("cb_TariffSignal_Flag")) {
+			$var_Id = $this->RegisterVariableInteger("tariffSignal_Flag", "Tariff Signal Flag", "", 111);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}
+			$var_Id = $this->RegisterVariableInteger("tariffSignal_Flag2", "Tariff Signal Flag -48h", "", 121);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}			
+		}
+
+		if($this->ReadPropertyBoolean("cb_TariffSignal_CreateSonnenfensterInfos")) {
+			$var_Id = $this->RegisterVariableInteger("duration_SonnenfesterToday", "Sonnenfenser Heute", "", 130);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}
+
+			$var_Id = $this->RegisterVariableInteger("duration_sonnenfesterTomorrow", "Sonnenfenser Morgen", "", 131);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}
+
+		}	
+								
+
 
 		$parse_INNOnetTariff = $this->ReadPropertyBoolean("cb_SelectedData_InnonetTarif");
 		$parse_aWATTarEnergy = $this->ReadPropertyBoolean("cb_SelectedData_aWATTarEnergy");
@@ -508,61 +835,90 @@ class INNOnet extends IPSModule {
 
 		//$categorieRoodId = IPS_GetParent($this->InstanceID);
 
+		$this->RegisterVariableInteger("selData_QueryStartTS", "SelectedData Query-Start-DateTime", "~UnixTimestamp", 200);
+
 		if($parse_INNOnetTariff) {
 			//$dummyParentId = $this->CreateCategoryByIdent(self::DUMMY_IDENT_userEnergyConsumption, "Meine Energie - Bezug", $categorieRoodId, 100, "");
-			$var_Id = $this->RegisterVariableFloat("selData_INNOnetTariff", "INNOnet Tariff", "INNOnet_Cent.4", 100);
-			AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true);
+			$var_Id = $this->RegisterVariableFloat("selData_INNOnetTariff", "INNOnet Tariff", "INNOnet_Cent.4", 210);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}
 		}	
 
 		if($parse_aWATTarEnergy) {
-			$var_Id = $this->RegisterVariableFloat("selData_aWATTarMarketprice", "aWATTar Marktpreis", "INNOnet_Cent.4", 110);
-			AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true);
+			$var_Id = $this->RegisterVariableFloat("selData_aWATTarMarketprice", "aWATTar Marktpreis", "INNOnet_Cent.4", 220);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}
 		}
 
 		if($parse_aWATTarFee) {
-			$var_Id = $this->RegisterVariableFloat("selData_aWATTarFee", "aWATTar Fee", "INNOnet_Cent.4", 111);
-			AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true);
+			$var_Id = $this->RegisterVariableFloat("selData_aWATTarFee", "aWATTar Fee", "INNOnet_Cent.4", 221);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}
 		}
 
 		if($parse_aWATTarVat) {
-			$var_Id = $this->RegisterVariableFloat("selData_aWATTarVat", "aWATTar Vat", "INNOnet_Cent.4", 112);
-			AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true);
+			$var_Id = $this->RegisterVariableFloat("selData_aWATTarVat", "aWATTar Vat", "INNOnet_Cent.4", 222);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}
 		}		
 
 		if($parse_TariffSignal) {
-			$var_Id = $this->RegisterVariableFloat("selData_TariffSignal", "INNOnet Tariff Signal", "", 120);
-			AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true);
+			$var_Id = $this->RegisterVariableFloat("selData_TariffSignal", "INNOnet Tariff Signal", "", 230);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}
 		}		
 
 		if($parse_obisLieferung) {
-			$var_Id = $this->RegisterVariableFloat("selData_ObisLieferung", "obis Lieferung", "INNOnet_Kwh", 130);
-			AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true);
-			AC_SetAggregationType($this->archivInstanzID, $var_Id, 1);
+			$var_Id = $this->RegisterVariableFloat("selData_ObisLieferung", "obis Lieferung", "INNOnet_Kwh", 240);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+				AC_SetAggregationType($this->archivInstanzID, $var_Id, 1);
+			}
 		}	
 		
 		if($parse_obisBezug) {
-			$var_Id = $this->RegisterVariableFloat("selData_ObisBezug", "obis Bezug", "INNOnet_Kwh", 131);
-			AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true);
-			AC_SetAggregationType($this->archivInstanzID, $var_Id, 1);
+			$var_Id = $this->RegisterVariableFloat("selData_ObisBezug", "obis Bezug", "INNOnet_Kwh", 250);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+				AC_SetAggregationType($this->archivInstanzID, $var_Id, 1);
+			};
 		}	
 		
 		if($parse_EnergyCommunity) {
-			$var_Id = $this->RegisterVariableFloat("selData_ObisEegErzeugung", "obis EEG Erzeugung", "INNOnet_Kwh", 132);
-			AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true);
-			AC_SetAggregationType($this->archivInstanzID, $var_Id, 1);
+			$var_Id = $this->RegisterVariableFloat("selData_ObisEegErzeugung", "obis EEG Erzeugung", "INNOnet_Kwh", 260);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}
+			$var_Id = $this->RegisterVariableFloat("selData_ObisEegErzeugung_Calc", "obis EEG Erzeugung CALC", "INNOnet_Kwh", 261);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+				AC_SetAggregationType($this->archivInstanzID, $var_Id, 1);
+			}			
 		}			
 
-		$this->RegisterVariableInteger("selData_QueryStartDateTime", "SelectedData Query-Start-DateTime", "~UnixTimestamp", 190);
-
-
+;
 		$this->RegisterVariableInteger("dateTimeQueryTS", "Delete Variable Data from", "~UnixTimestamp", 800);
 		
 	
-		$this->RegisterVariableInteger("updateCntOk", "Update Cnt OK", "", 900);
-		$this->RegisterVariableInteger("updateCntNotOk", "Update Cnt NOT Ok", "", 901);
-		$this->RegisterVariableInteger("errorCnt", "Error Cnt", "", 910);
-		$this->RegisterVariableString("lastError", "Last Error", "", 911);
-		$this->RegisterVariableInteger("lastErrorTimestamp", "Last Error Timestamp", "~UnixTimestamp", 912);
+		$this->RegisterVariableInteger("TariffSignal_Ok", "TariffSignal Update OK", "", 900);
+		$this->RegisterVariableInteger("TariffSignal_NotOk", "TariffSignal Update NOT Ok", "", 901);
+
+		$this->RegisterVariableInteger("SelectedData_Ok", "SelectedData Update OK", "", 910);
+		$this->RegisterVariableInteger("SelectedData_NotOk", "SelectedData Update NOT Ok", "", 911);
+
+		$this->RegisterVariableInteger("httpStatus200", "HTTP Status 200", "", 920);
+		$this->RegisterVariableInteger("httpStatus400", "HTTP Status >= 400", "", 921);
+		$this->RegisterVariableInteger("httpStatusOther", "HTTP Status Other", "", 922);
+		$this->RegisterVariableInteger("RequestApiExeption", "HTTP Exeption", "", 923);
+
+		$this->RegisterVariableInteger("errorCnt", "Error Cnt", "", 930);
+		$this->RegisterVariableString("lastError", "Last Error", "", 931);
+		$this->RegisterVariableInteger("lastErrorTimestamp", "Last Error Timestamp", "~UnixTimestamp", 932);
 
 		IPS_ApplyChanges($this->archivInstanzID);
 		if ($this->logLevel >= LogLevel::TRACE) {
