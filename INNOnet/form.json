@@ -12,7 +12,7 @@
         },
         {
             "type": "SelectDateTime",
-            "name": "dt_QueryInitStartFrom",
+            "name": "queryStart_InitTS",
             "caption": "Inital Start DateTime"
         },
         {
@@ -35,7 +35,7 @@
                 {
                     "type": "NumberSpinner",
                     "name": "ns_TariffSignal_OffsetHours",
-                    "caption": "Abfrage Offset",
+                    "caption": "Zeitspanne pro Abfrage [Stunden]",
                     "suffix": "Stunden"
                 },
                 {
@@ -72,7 +72,7 @@
                 {
                     "type": "NumberSpinner",
                     "name": "ns_SelectedData_QueryHours",
-                    "caption": "Abfrage Interval/Zeitspanne [Stunden]",
+                    "caption": "Zeitspanne pro Abfrage [Stunden]",
                     "suffix": "Stunden"
                 },
                 {
@@ -183,22 +183,22 @@
         {
             "type": "Button",
             "label": "Update Timeseries Tariff-Signal (mit AddLoggedValue)",
-            "onClick": "INNOnet_TimeSeriesCollection_TariffSignal_UPDATE($id, 'ModulForm', true);"
+            "onClick": "INNOnet_TariffSignal_TimeSeriesCollection_UPDATE($id, 'ModulForm', true);"
         },
         {
             "type": "Button",
             "label": "Update Timeseries Tariff-Signal (ohne AddLoggedValue)",
-            "onClick": "INNOnet_TimeSeriesCollection_TariffSignal_UPDATE($id, 'ModulForm', false);"
+            "onClick": "INNOnet_TariffSignal_TimeSeriesCollection_UPDATE($id, 'ModulForm', false);"
         },
         {
             "type": "Button",
             "label": "Update Timeseriescollection-Selecteddata (mit AddLoggedValue)",
-            "onClick": "INNOnet_TimeSeriesCollection_SelectedData_UPDATE($id, 'ModulForm', true);"
+            "onClick": "INNOnet_SelectedData_TimeSeriesCollection_UPDATE($id, 'ModulForm', true);"
         },
         {
             "type": "Button",
             "label": "Update Timeseriescollection-Selecteddata (ohne AddLoggedValue)",
-            "onClick": "INNOnet_TimeSeriesCollection_SelectedData_UPDATE($id, 'ModulForm', false);"
+            "onClick": "INNOnet_SelectedData_TimeSeriesCollection_UPDATE($id, 'ModulForm', false);"
         },
         {
             "type": "Button",
