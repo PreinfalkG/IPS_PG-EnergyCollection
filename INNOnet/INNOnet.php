@@ -587,10 +587,10 @@ trait INNOnet_FUNCTIONS {
             $errorMsg = sprintf('{ "ERROR" : "Exception > %s [%s] {%s}" }', $e->getMessage(), $e->getCode(), $apiURL);
             $this->HandleError(__FUNCTION__, $errorMsg, 0, true);
         } finally {
-            SetValueFloat($this->GetIDForIdent("httpDuration"), $duration);
+            $duration = $this->CalcDuration_ms($startTime);
+			SetValueFloat($this->GetIDForIdent("httpDuration"), $duration);
 			curl_close($ch);
             if ($this->logLevel >= LogLevel::COMMUNICATION) {
-                $duration = $this->CalcDuration_ms($startTime);
                 $this->AddLog(__FUNCTION__, sprintf("CURL Connection closed [Duration: %.2f ms]", $duration));
             }
         }
