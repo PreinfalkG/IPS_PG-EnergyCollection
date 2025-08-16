@@ -488,12 +488,7 @@ class INNOnet extends IPSModule {
 			}					
 		}			
 
-
-;
-		$this->RegisterVariableInteger("dateTimeQueryTS", "Delete Variable Data from", "~UnixTimestamp", 800);
-		
-	
-		$this->RegisterVariableInteger("TariffSignal_Ok", "TariffSignal Update OK", "", 900);
+			$this->RegisterVariableInteger("TariffSignal_Ok", "TariffSignal Update OK", "", 900);
 		$this->RegisterVariableInteger("TariffSignal_NotOk", "TariffSignal Update NOT Ok", "", 901);
 		$this->RegisterVariableInteger("TariffSignal_LastUpdate", "TariffSignal LastUpdate", "~UnixTimestamp", 902);
 
@@ -510,6 +505,9 @@ class INNOnet extends IPSModule {
 		$this->RegisterVariableInteger("errorCnt", "Error Cnt", "", 930);
 		$this->RegisterVariableString("lastError", "Last Error", "", 931);
 		$this->RegisterVariableInteger("lastErrorTimestamp", "Last Error Timestamp", "~UnixTimestamp", 932);
+
+		$this->RegisterVariableInteger("dateTimeQueryTS", "Delete Variable Data from", "~UnixTimestamp", 950);
+
 
 		IPS_ApplyChanges($this->archivInstanzID);
 		if ($this->logLevel >= LogLevel::TRACE) {

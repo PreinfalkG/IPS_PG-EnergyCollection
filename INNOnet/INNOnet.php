@@ -587,10 +587,10 @@ trait INNOnet_FUNCTIONS {
             $errorMsg = sprintf('{ "ERROR" : "Exception > %s [%s] {%s}" }', $e->getMessage(), $e->getCode(), $apiURL);
             $this->HandleError(__FUNCTION__, $errorMsg, 0, true);
         } finally {
-            curl_close($ch);
+            SetValueFloat($this->GetIDForIdent("httpDuration"), $duration);
+			curl_close($ch);
             if ($this->logLevel >= LogLevel::COMMUNICATION) {
                 $duration = $this->CalcDuration_ms($startTime);
-                SetValueFloat($this->GetIDForIdent("httpDuration"), $duration);
                 $this->AddLog(__FUNCTION__, sprintf("CURL Connection closed [Duration: %.2f ms]", $duration));
             }
         }
@@ -600,19 +600,8 @@ trait INNOnet_FUNCTIONS {
             $this->SetStatus(200);
             return false;
         } else {
+			$this->SetStatus(102);
             return $httpResponse;
-
-            /*
-            $jsonResponse = json_decode($httpResponse);
-            if (json_last_error() == JSON_ERROR_NONE) {
-                $this->SetStatus(102);
-                //return isset($jsonResponse['data']) ? $jsonResponse['data'] : false;
-                return $jsonResponse;
-            } else {
-                $this->SetStatus(200);
-                return false;
-            }
-            */
         }
     }
 
