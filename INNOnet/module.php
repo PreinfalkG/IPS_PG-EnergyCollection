@@ -89,6 +89,8 @@ class INNOnet extends IPSModule {
 		$this->RegisterPropertyBoolean("cb_SelectedData_obisLieferung", false);	
 		$this->RegisterPropertyBoolean("cb_SelectedData_obisBezug", false);	
 		$this->RegisterPropertyBoolean("cb_SelectedData_obisEnergyCommunity", false);	
+		
+		$this->RegisterPropertyBoolean("cb_SelectedData_obisEegCALC", false);	
 
 		$this->RegisterTimer('TimerTariffSignal_INNOnet', 0, 'INNOnet_TimerTariffSignal_INNOnet('.$this->InstanceID.');');
 		$this->RegisterTimer('TimerSelectedData_INNOnet', 0, 'INNOnet_TimerSelectedData_INNOnet($_IPS["TARGET"]);');
@@ -108,10 +110,25 @@ class INNOnet extends IPSModule {
 
 		if($Message == IPS_KERNELMESSAGE) {
 			if ($Data[0] == KR_READY ) {
-				$this->AddLog(__FUNCTION__, "Set Initial Interval for 'TimerTariffSignal_INNOnet' to 60 Sec", 0, true); 
-				$this->SetTimerTariffSignal(60);
-				$this->AddLog(__FUNCTION__, "Set Initial Interval for 'TimerSelectedData_INNOnet' to 300 Sec", 0, true); 
-				$this->SetTimerSelectedData(300, 0);
+
+				$tariffSignal_AutoUpdate = $this->ReadPropertyBoolean("cb_TariffSignal_EnableAutoUpdate");
+				if ($tariffSignal_AutoUpdate) {
+					$this->AddLog(__FUNCTION__, "Set Initial Interval for 'TimerTariffSignal_INNOnet' to 60 Sec", 0, true); 
+					$this->SetTimerTariffSignal(60);
+				} else {
+					$this->AddLog(__FUNCTION__, "TariffSignal_EnableAutoUpdate disabled > Set 'TimerTariffSignal_INNOnet' to 0 Sec", 0, true); 
+					$this->SetTimerTariffSignal(0);
+				}
+
+				$selectedData_AutoUpdate = $this->ReadPropertyBoolean("cb_SelectedData_EnableAutoUpdate");
+				if ($selectedData_AutoUpdate) {
+					$this->AddLog(__FUNCTION__, "Set Initial Interval for 'TimerSelectedData_INNOnet' to 300 Sec", 0, true); 
+					$this->SetTimerSelectedData(300, 0);
+				} else {
+					$this->AddLog(__FUNCTION__, "SelectedData_EnableAutoUpdate disabled > Set 'TimerSelectedData_INNOnet' to 0 Sec", 0, true); 
+					$this->SetTimerSelectedData(0);
+				}
+
 			}
 		}
 	}
@@ -404,6 +421,7 @@ class INNOnet extends IPSModule {
 		$parse_obisLieferung = $this->ReadPropertyBoolean("cb_SelectedData_obisLieferung");
 		$parse_obisBezug = $this->ReadPropertyBoolean("cb_SelectedData_obisBezug");
 		$parse_EnergyCommunity = $this->ReadPropertyBoolean("cb_SelectedData_obisEnergyCommunity");
+		$calc_EEG = $this->ReadPropertyBoolean("cb_SelectedData_obisEegCALC");
 
 		//$categorieRoodId = IPS_GetParent($this->InstanceID);
 
@@ -447,11 +465,11 @@ class INNOnet extends IPSModule {
 		}		
 
 		if($parse_obisLieferung) {
-			$var_Id = $this->RegisterVariableFloat("selData_ObisLieferung", "obis Lieferung", "INNOnet.kWh", 240);
+			$var_Id = $this->RegisterVariableFloat("selData_ObisLieferung", "obis Bezug Reststrom", "INNOnet.kWh", 240);
 			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
 				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
 			}
-			$var_Id = $this->RegisterVariableFloat("selData_ObisLieferung_SUM", "obis Lieferung SUM", "INNOnet.kWh", 250);
+			$var_Id = $this->RegisterVariableFloat("selData_ObisLieferung_SUM", "obis Bezug Reststrom SUM", "INNOnet.kWh", 250);
 			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
 				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
 				AC_SetAggregationType($this->archivInstanzID, $var_Id, 1);
@@ -459,11 +477,11 @@ class INNOnet extends IPSModule {
 		}	
 		
 		if($parse_obisBezug) {
-			$var_Id = $this->RegisterVariableFloat("selData_ObisBezug", "obis Bezug", "INNOnet.kWh", 241);
+			$var_Id = $this->RegisterVariableFloat("selData_ObisBezug", "obis Einspeisung Energielieferanten", "INNOnet.kWh", 241);
 			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
 				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
 			};
-			$var_Id = $this->RegisterVariableFloat("selData_ObisBezug_SUM", "obis Bezug SUM", "INNOnet.kWh", 251);
+			$var_Id = $this->RegisterVariableFloat("selData_ObisBezug_SUM", "obis Einspeisung Energielieferanten SUM", "INNOnet.kWh", 251);
 			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
 				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
 				AC_SetAggregationType($this->archivInstanzID, $var_Id, 1);
@@ -472,23 +490,31 @@ class INNOnet extends IPSModule {
 		}	
 		
 		if($parse_EnergyCommunity) {
-			$var_Id = $this->RegisterVariableFloat("selData_ObisEegErzeugung", "obis EEG Erzeugung", "INNOnet.kWh", 242);
+			$var_Id = $this->RegisterVariableFloat("selData_ObisEegErzeugung", "obis Einspeisung GESAMT", "INNOnet.kWh", 242);
 			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
 				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
 			}
-			$var_Id = $this->RegisterVariableFloat("selData_ObisEegErzeugung_Calc", "obis EEG Erzeugung CALC", "INNOnet.kWh", 2243);
-			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
-				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
-				AC_SetAggregationType($this->archivInstanzID, $var_Id, 1);
-			}	
-			$var_Id = $this->RegisterVariableFloat("selData_ObisEegErzeugung_SUM", "obis EEG Erzeugung SUM", "INNOnet.kWh", 252);
+			$var_Id = $this->RegisterVariableFloat("selData_ObisEegErzeugung_SUM", "obis Einspeisung GESAMT SUM", "INNOnet.kWh", 252);
 			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
 				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
 				AC_SetAggregationType($this->archivInstanzID, $var_Id, 1);				
 			}					
+		}	
+		
+		if($calc_EEG) {
+			$var_Id = $this->RegisterVariableFloat("selData_ObisEEG_Calc", "obis Einspeisung EEG CALC", "INNOnet.kWh", 243);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}		
+			$var_Id = $this->RegisterVariableFloat("selData_ObisEEG_CalcSUM", "obis Einspeisung EEG CALC SUM", "INNOnet.kWh", 253);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+				AC_SetAggregationType($this->archivInstanzID, $var_Id, 1);
+			}							
 		}			
 
-			$this->RegisterVariableInteger("TariffSignal_Ok", "TariffSignal Update OK", "", 900);
+
+		$this->RegisterVariableInteger("TariffSignal_Ok", "TariffSignal Update OK", "", 900);
 		$this->RegisterVariableInteger("TariffSignal_NotOk", "TariffSignal Update NOT Ok", "", 901);
 		$this->RegisterVariableInteger("TariffSignal_LastUpdate", "TariffSignal LastUpdate", "~UnixTimestamp", 902);
 
@@ -517,6 +543,14 @@ class INNOnet extends IPSModule {
 
 	public function GetClassInfo() {
 		return print_r($this, true);
+	}
+
+	public function GetTimerInfo(string $sender, $ipsLogOutput=true) {
+		$timerInterval_TariffSignal = $this->GetTimerInterval("TimerTariffSignal_INNOnet");
+		$timerInterval_SelectedData = $this->GetTimerInterval("TimerSelectedData_INNOnet");
+		$msg = sprintf("Timer INFO '%s' :: TimerTariffSignal_INNOnet: %s ms | TimerSelectedData_INNOnet: %s ms", $sender, $timerInterval_TariffSignal, $timerInterval_SelectedData);
+		$this->AddLog(__FUNCTION__, $msg, 0, $ipsLogOutput);
+		return $msg;
 	}
 
 	protected function IncreaseCounterVar(string $ident) {

@@ -1,0 +1,44 @@
+{
+    "datasets": [
+        {
+            "variableID": 49508,
+            "fillColor": "clear",
+            "strokeColor": "#a421d4",
+            "timeOffset": 0,
+            "visible": true,
+            "side": "left"
+        },
+        {
+            "variableID": 46219,
+            "fillColor": "clear",
+            "strokeColor": "#cd28c1",
+            "timeOffset": 0,
+            "visible": true,
+            "side": "left"
+        },
+        {
+            "variableID": 15668,
+            "fillColor": "clear",
+            "strokeColor": "#2f3c5e",
+            "timeOffset": 0,
+            "visible": false,
+            "side": "left"
+        },
+        {
+            "variableID": 52915,
+            "fillColor": "clear",
+            "strokeColor": "#fc9744",
+            "timeOffset": 0,
+            "visible": true,
+            "side": "left"
+        },
+        {
+            "variableID": 38443,
+            "fillColor": "clear",
+            "strokeColor": "#ade3f4",
+            "timeOffset": 0,
+            "visible": false,
+            "side": "right"
+        }
+    ]
+}

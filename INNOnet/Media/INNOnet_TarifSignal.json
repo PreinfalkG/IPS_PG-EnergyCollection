@@ -1,0 +1,19 @@
+{
+    "datasets": [
+        {
+            "variableID": 20775,
+            "fillColor": "#c800ff",
+            "strokeColor": "#c800ff",
+            "timeOffset": 0,
+            "visible": true
+        },
+        {
+            "variableID": 56110,
+            "fillColor": "clear",
+            "strokeColor": "#473aae",
+            "timeOffset": 0,
+            "visible": true,
+            "side": "right"
+        }
+    ]
+}

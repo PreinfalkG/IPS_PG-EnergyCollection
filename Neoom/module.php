@@ -81,8 +81,14 @@ class Neoom extends IPSModule {
 
 		if($Message == IPS_KERNELMESSAGE) {
 			if ($Data[0] == KR_READY ) {
-				$this->AddLog(__FUNCTION__, "Set Initial Interval for 'TimerUpdate_NEOOM' to 30 seconds", 0, true); 
-				$this->SetUpdateInterval(5);
+				$autoUpdate = $this->ReadPropertyBoolean("EnableAutoUpdate");
+				if ($autoUpdate) {
+					$this->AddLog(__FUNCTION__, "Set Initial Interval for 'TimerUpdate_NEOOM' to 60 seconds", 0, true); 
+					$this->SetUpdateInterval(60);
+				} else {
+					$this->AddLog(__FUNCTION__, "AutoUpdate disabled > Set 'TimerUpdate_NEOOM' to 0 seconds", 0, true); 
+					$this->SetUpdateInterval(0);
+				}
 			}
 		}
 	}

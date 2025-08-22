@@ -113,21 +113,31 @@
                 },
                 {
                     "type": "CheckBox",
-                    "caption": "OBIS Lieferung",
+                    "caption": "OBIS Lieferung (Reststrombezug Energielieferanten)",
                     "enabled": true,
                     "name": "cb_SelectedData_obisLieferung"
                 },
                 {
                     "type": "CheckBox",
-                    "caption": "OBIS Bezug",
+                    "caption": "OBIS Bezug (Reststrom Einspeisung)",
                     "enabled": true,
                     "name": "cb_SelectedData_obisBezug"
                 },
                 {
                     "type": "CheckBox",
-                    "caption": "OBIS Gemeinschaftliche-Erzeugung",
+                    "caption": "OBIS Gemeinschaftliche-Erzeugung (Gesamt Einspeisung)",
                     "enabled": true,
                     "name": "cb_SelectedData_obisEnergyCommunity"
+                },
+                {
+                    "type": "CheckBox",
+                    "caption": "OBIS EEG CALC",
+                    "enabled": true,
+                    "name": "cb_SelectedData_obisEegCALC"
+                },                
+                { 
+                    "type": "Label",
+                    "caption": "Die Bezeichnung der Obis Timeseries erfolgt aus Sicht des Energielieferanten. \nDas bedeutet: Die 'Lieferung' entspricht aus Sicht des Lieferanten Ihrem Reststrombezug. Umgekehrt gilt: Wenn der Lieferant von Ihnen Energie bezieht, handelt es sich um Ihre Reststrom-Einspeisung. Die Timeserie 'obis-Gemeinschaftliche-Erzeugung' umfasst Ihren gesamten Überschuss, also sowohl den EEG-Anteil als auch den Anteil, der an Reststrombezieher geliefert wird." 
                 }
             ]
         },
@@ -214,6 +224,11 @@
             "type": "Button",
             "caption": "Reset Counter Variables",
             "onClick": "INNOnet_ResetCounterVariables($id, 'ModulForm');"
+        },
+        {
+            "type": "Button",
+            "caption": "Get Timer Info",
+            "onClick": "INNOnet_GetTimerInfo($id, 'ModulForm', true);"
         }
     ],
     "status": [

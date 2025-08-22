@@ -393,6 +393,8 @@ trait INNOnet_FUNCTIONS {
 				$obis_Bezug = "obis-Bezug-Wirkenergie";
 				$obisEEG_Erzeugung = "obis-Gemeinschaftliche-Erzeugung";
 
+				$arr_ObisEEG_Erzeugung = [];
+				$arr_ObisBezug = [];
 
 				foreach ($dataArr as $dataArrElem) {
 
@@ -405,36 +407,122 @@ trait INNOnet_FUNCTIONS {
 						if(str_starts_with($elemName, $INNOnetTariff)) {
 							if($this->ReadPropertyBoolean("cb_SelectedData_InnonetTarif")) {
 								$this->SelectedData_TimeSeriesCollection_ExtractValues($dataArrElem, $INNOnetTariff, "selData_INNOnetTariff", "", 1, $addValuesToArchiv);
-							} else { if($this->logLevel >= LogLevel::DEBUG) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $INNOnetTariff)); } }
+							} else { if($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $INNOnetTariff)); } }
 						} else if(str_ends_with($elemName, $aWATTar_Marketprice)) {
 							if($this->ReadPropertyBoolean("cb_SelectedData_aWATTarEnergy")) {
 								$this->SelectedData_TimeSeriesCollection_ExtractValues($dataArrElem, $aWATTar_Marketprice, "selData_aWATTarMarketprice", "", 100, $addValuesToArchiv);
-							} else { if($this->logLevel >= LogLevel::DEBUG) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $aWATTar_Marketprice)); } }
+							} else { if($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $aWATTar_Marketprice)); } }
 						} else if(str_ends_with($elemName, $aWATTar_Fee)) {
 							if($this->ReadPropertyBoolean("cb_SelectedData_aWATTarFee")) {
 								$this->SelectedData_TimeSeriesCollection_ExtractValues($dataArrElem, $aWATTar_Fee, "selData_aWATTarFee", "", 100, $addValuesToArchiv);
-							} else { if($this->logLevel >= LogLevel::DEBUG) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $aWATTar_Fee)); } }
+							} else { if($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $aWATTar_Fee)); } }
 						} else if(str_ends_with($elemName, $aWATTar_Vat)) {
 							if($this->ReadPropertyBoolean("cb_SelectedData_aWATTarVat")) {
 								$this->SelectedData_TimeSeriesCollection_ExtractValues($dataArrElem, $aWATTar_Vat, "selData_aWATTarVat", "", 100, $addValuesToArchiv);
-							} else { if($this->logLevel >= LogLevel::DEBUG) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $aWATTar_Vat)); } }
+							} else { if($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $aWATTar_Vat)); } }
 						} else if(str_starts_with($elemName, $INNOnetTariffSignal)) {
 							if($this->ReadPropertyBoolean("cb_SelectedData_TariffSignal")) {
 								$this->SelectedData_TimeSeriesCollection_ExtractValues($dataArrElem, $INNOnetTariffSignal, "selData_TariffSignal", "", 1, $addValuesToArchiv);
-							} else { if($this->logLevel >= LogLevel::DEBUG) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $INNOnetTariffSignal)); } }
+							} else { if($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $INNOnetTariffSignal)); } }
 						} else if(str_ends_with($elemName, $obis_Lieferung)) {
 							if($this->ReadPropertyBoolean("cb_SelectedData_obisLieferung")) {
 								$this->SelectedData_TimeSeriesCollection_ExtractValues($dataArrElem, $obis_Lieferung, "selData_ObisLieferung", "selData_ObisLieferung_SUM", 1, $addValuesToArchiv);
-							} else { if($this->logLevel >= LogLevel::DEBUG) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $obis_Lieferung)); } }
+							} else { if($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $obis_Lieferung)); } }
 						} else if(str_ends_with($elemName, $obis_Bezug)) {
 							if($this->ReadPropertyBoolean("cb_SelectedData_obisBezug")) {
 								$this->SelectedData_TimeSeriesCollection_ExtractValues($dataArrElem, $obis_Bezug, "selData_ObisBezug", "selData_ObisBezug_SUM", 1, $addValuesToArchiv);
-							} else { if($this->logLevel >= LogLevel::DEBUG) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $obis_Bezug)); } }							
+							} else { if($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $obis_Bezug)); } }							
 						} else if(str_ends_with($elemName, $obisEEG_Erzeugung)) {
 							if($this->ReadPropertyBoolean("cb_SelectedData_obisEnergyCommunity")) {
 								$this->SelectedData_TimeSeriesCollection_ExtractValues($dataArrElem, $obisEEG_Erzeugung, "selData_ObisEegErzeugung", "selData_ObisEegErzeugung_SUM", 1, $addValuesToArchiv);
-							} else { if($this->logLevel >= LogLevel::DEBUG) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $obisEEG_Erzeugung)); } }
+							} else { if($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $obisEEG_Erzeugung)); } }
 						}				
+
+						if($this->ReadPropertyBoolean("cb_SelectedData_obisEegCALC")) {
+
+							if ($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("> check for obisEegCALC: %s", $elemName)); }	
+
+							if(str_ends_with($elemName, $obisEEG_Erzeugung)) {
+								////IPS_LogMessage(__FUNCTION__, print_r($dataPoint, true));
+								//IPS_LogMessage(__FUNCTION__, sprintf("found '%s'", $elemName));
+								foreach ($dataArrElem['Data']['Data'] as $dataPoint) {
+									$from = new DateTimeImmutable($dataPoint['From']);
+									$from = $from->setTimezone($this->local_timezone);
+									$value = floatval($dataPoint["Value"]); 
+            						$arr_ObisEEG_Erzeugung[$from->getTimestamp()] = $value;
+        						}
+							}
+
+							if(str_ends_with($elemName, $obis_Bezug)) {
+								//IPS_LogMessage(__FUNCTION__, print_r($dataPoint, true));
+								//IPS_LogMessage(__FUNCTION__, sprintf("found '%s'", $elemName));
+								foreach ($dataArrElem['Data']['Data'] as $dataPoint) {
+									$from = new DateTimeImmutable($dataPoint['From']);
+									$from = $from->setTimezone($this->local_timezone);
+									$value = floatval($dataPoint["Value"]); 
+            						$arr_ObisBezug[$from->getTimestamp()] = $value;
+        						}
+							}	
+							//IPS_LogMessage(__FUNCTION__, sprintf("arr_ObisEEG_Erzeugung: %s | arr_ObisBezug: %s", count($arr_ObisEEG_Erzeugung), count($arr_ObisBezug)));
+							$differenzArray = [];
+							$differenzArray_SUM = [];
+							if (!empty($arr_ObisEEG_Erzeugung)) {
+
+								if(!empty($arr_ObisBezug)) {
+									if (count($arr_ObisEEG_Erzeugung) === count($arr_ObisBezug)) {
+
+										$elemCnt = 0;
+										$value_SUM = 0;
+
+										foreach ($arr_ObisEEG_Erzeugung as $timestamp => $value) {
+											if (isset($arr_ObisBezug[$timestamp])) {
+												$diffValue = $value - $arr_ObisBezug[$timestamp];
+												$differenzArray[] =  ['TimeStamp' => $timestamp, 'Value' => $diffValue];
+
+												$value_SUM = $value_SUM + $diffValue;
+												if($elemCnt == 0) {
+													$differenzArray_SUM[] = ['TimeStamp' => $timestamp-1, 'Value' => 0];	
+												}
+												$differenzArray_SUM[] = ['TimeStamp' => $timestamp, 'Value' => $value_SUM];
+
+											} else {
+												if ($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "DataArr 'arr_ObisBezug' has no Value for 'Timestamp'"); }	
+											}
+
+											$elemCnt++;
+										}
+
+										if($addValuesToArchiv) { 
+											$varIdent = "selData_ObisEEG_Calc";
+											$varId = $this->GetIDForIdent($varIdent);
+											$result = AC_AddLoggedValues($this->archivInstanzID, $varId, $differenzArray); 			
+											if($result) {
+												if($this->logLevel >= LogLevel::INFO) {  $this->AddLog(__FUNCTION__, sprintf("AC_AddLoggedValues %d Entries added for VarIdent '%s' [%d]", count($differenzArray), $varIdent, $varId)); }
+											} else {
+												if($this->logLevel >= LogLevel::ERROR) {  $this->AddLog(__FUNCTION__, sprintf("ERROR on AC_AddLoggedValues for VarIdent '%s'", $varIdent)); }
+											}		
+											
+											$varIdent = "selData_ObisEEG_CalcSUM";
+											$varId = $this->GetIDForIdent($varIdent);
+											$result = AC_AddLoggedValues($this->archivInstanzID, $varId, $differenzArray_SUM); 			
+											if($result) {
+												if($this->logLevel >= LogLevel::INFO) {  $this->AddLog(__FUNCTION__, sprintf("AC_AddLoggedValues %d Entries added for VarIdent '%s' [%d]", count($differenzArray_SUM), $varIdent, $varId)); }
+											} else {
+												if($this->logLevel >= LogLevel::ERROR) {  $this->AddLog(__FUNCTION__, sprintf("ERROR on AC_AddLoggedValues for VarIdent '%s'", $varIdent)); }
+											}												
+
+										}
+									} else {
+										if ($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "DataArr count 'arr_ObisEEG_Erzeugung' != 'arr_ObisBezug' > can not CALC EEG Einspeisung"); }	
+									}
+								} else {
+									if ($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "DataArr 'arr_ObisBezug' is empty > can not CALC EEG Einspeisung"); }										
+								}
+							} else {
+								if ($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "DataArr 'arr_ObisEEG_Erzeugung' is empty > can not CALC EEG Einspeisung"); }		
+							}				
+						}
+
 
 					} else {
 						if ($this->logLevel >= LogLevel::WARN) {
@@ -523,8 +611,6 @@ trait INNOnet_FUNCTIONS {
 
 
 	}
-
-
 
     public function RequestAPI(string $caller, string $apiURL) {
 

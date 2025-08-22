@@ -1,0 +1,31 @@
+{
+    "datasets": [
+        {
+            "variableID": 40825,
+            "fillColor": "#d400ff",
+            "strokeColor": "#d400ff",
+            "timeOffset": 0,
+            "visible": true,
+            "title": "obis Bezug Reststrom",
+            "side": "left"
+        },
+        {
+            "variableID": 55433,
+            "fillColor": "#0b5ac1",
+            "strokeColor": "#0b5ac1",
+            "timeOffset": 0,
+            "visible": true,
+            "title": "obis Einspeisung Lieferanten",
+            "side": "left"
+        },
+        {
+            "variableID": 53205,
+            "fillColor": "#009e03",
+            "strokeColor": "#009e03",
+            "timeOffset": 0,
+            "visible": true,
+            "title": "obis Einspeisung GESAMT",
+            "side": "left"
+        }
+    ]
+}
