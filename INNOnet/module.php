@@ -13,6 +13,16 @@ class INNOnet extends IPSModule {
 	const DUMMY_IDENT_userEnergyFeedIn = "userEnergyFeedIn";
 	const DUMMY_IDENT_energyCommunity = "energyCommunity";
 
+
+	const INNOnetTariff = "innonet-tariff";	
+	const INNOnetTariffSignal ="tariff-signal";
+	const awtat_HLAT = "AWTAT-tid-HLAT";
+	const awtat_HLATFee = "AWTAT-tid-HLAT-Fee";
+	const awtat_HLATVat = "AWTAT-tid-HLAT-Vat";
+	const obis_Bezug = "obis-Lieferung-Wirkenergie";
+	const obis_Lieferung = "obis-Bezug-Wirkenergie";
+	const obis_LieferungTotal = "obis-Gemeinschaftliche-Erzeugung";
+
 	use COMMON_FUNCTIONS;
 	use INNOnet_FUNCTIONS;
 
@@ -40,6 +50,17 @@ class INNOnet extends IPSModule {
 
 		$this->tariffSignal_TimerInterval = 15*60;
 		$this->selectedData_SecondsAferMidnight = 16*3600 + 5;
+
+
+		$this->INNOnetTariff = "innonet-tariff";	
+		$this->INNOnetTariffSignal ="tariff-signal";
+		$this->awtat_HLAT = "AWTAT-tid-HLAT";
+		$this->awtat_HLATFee = "AWTAT-tid-HLAT-Fee";
+		$this->awtat_HLATVat = "AWTAT-tid-HLAT-Vat";
+		$this->obis_Bezug = "obis-Lieferung-Wirkenergie";
+		$this->obis_Lieferung = "obis-Bezug-Wirkenergie";
+		$this->obis_LieferungTotal = "obis-Gemeinschaftliche-Erzeugung";
+
 
 		$this->logLevel = @$this->ReadPropertyInteger("LogLevel");
 		if ($this->logLevel >= LogLevel::TRACE) {
@@ -82,9 +103,10 @@ class INNOnet extends IPSModule {
 		$this->RegisterPropertyInteger("ns_SelectedData_QueryHours", 24);
 		$this->RegisterPropertyInteger("ns_SelectedDataQuery_OffsetDaysUntilNow", 2);
 		$this->RegisterPropertyBoolean("cb_SelectedData_InnonetTarif", false);
-		$this->RegisterPropertyBoolean("cb_SelectedData_aWATTarEnergy", false);
-		$this->RegisterPropertyBoolean("cb_SelectedData_aWATTarFee", false);		
-		$this->RegisterPropertyBoolean("cb_SelectedData_aWATTarVat", false);	
+		$this->RegisterPropertyBoolean("cb_SelectedData_AWTAT_tid_HLAT", false);
+		$this->RegisterPropertyBoolean("cb_SelectedData_AWTAT_tid_HLAT_Fee", false);		
+		$this->RegisterPropertyBoolean("cb_SelectedData_AWTAT_tid_HLAT_Vat", false);	
+		$this->RegisterPropertyBoolean("cb_SelectedData_AWTAT_tid_HLAT_SUM", false);	
 		$this->RegisterPropertyBoolean("cb_SelectedData_TariffSignal", false);	
 		$this->RegisterPropertyBoolean("cb_SelectedData_obisLieferung", false);	
 		$this->RegisterPropertyBoolean("cb_SelectedData_obisBezug", false);	
@@ -412,16 +434,16 @@ class INNOnet extends IPSModule {
 		}	
 								
 
-
 		$parse_INNOnetTariff = $this->ReadPropertyBoolean("cb_SelectedData_InnonetTarif");
-		$parse_aWATTarEnergy = $this->ReadPropertyBoolean("cb_SelectedData_aWATTarEnergy");
-		$parse_aWATTarFee = $this->ReadPropertyBoolean("cb_SelectedData_aWATTarFee");
-		$parse_aWATTarVat = $this->ReadPropertyBoolean("cb_SelectedData_aWATTarVat");
 		$parse_TariffSignal = $this->ReadPropertyBoolean("cb_SelectedData_TariffSignal");
-		$parse_obisLieferung = $this->ReadPropertyBoolean("cb_SelectedData_obisLieferung");
+		$parse_AWTAT_tid_HLAT = $this->ReadPropertyBoolean("cb_SelectedData_AWTAT_tid_HLAT");
+		$parse_AWTAT_tid_HLAT_Fee = $this->ReadPropertyBoolean("cb_SelectedData_AWTAT_tid_HLAT_Fee");
+		$parse_AWTAT_tid_HLAT_Vat = $this->ReadPropertyBoolean("cb_SelectedData_AWTAT_tid_HLAT_Vat");
+		$parse_AWTAT_tid_HLAT_SUM = $this->ReadPropertyBoolean("cb_SelectedData_AWTAT_tid_HLAT_SUM");
 		$parse_obisBezug = $this->ReadPropertyBoolean("cb_SelectedData_obisBezug");
-		$parse_EnergyCommunity = $this->ReadPropertyBoolean("cb_SelectedData_obisEnergyCommunity");
-		$calc_EEG = $this->ReadPropertyBoolean("cb_SelectedData_obisEegCALC");
+		$parse_obisLieferung = $this->ReadPropertyBoolean("cb_SelectedData_obisLieferung");
+		$parse_obisEnergyCommunity = $this->ReadPropertyBoolean("cb_SelectedData_obisEnergyCommunity");
+		$calc_obisEEG = $this->ReadPropertyBoolean("cb_SelectedData_obisEegCALC");
 
 		//$categorieRoodId = IPS_GetParent($this->InstanceID);
 
@@ -436,40 +458,47 @@ class INNOnet extends IPSModule {
 			}
 		}	
 
-		if($parse_aWATTarEnergy) {
-			$var_Id = $this->RegisterVariableFloat("selData_aWATTarMarketprice", "aWATTar Marktpreis", "INNOnet.Cent.4", 220);
-			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
-				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
-			}
-		}
-
-		if($parse_aWATTarFee) {
-			$var_Id = $this->RegisterVariableFloat("selData_aWATTarFee", "aWATTar Fee", "INNOnet.Cent.4", 221);
-			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
-				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
-			}
-		}
-
-		if($parse_aWATTarVat) {
-			$var_Id = $this->RegisterVariableFloat("selData_aWATTarVat", "aWATTar Vat", "INNOnet.Cent.4", 222);
-			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
-				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
-			}
-		}		
-
 		if($parse_TariffSignal) {
-			$var_Id = $this->RegisterVariableFloat("selData_TariffSignal", "INNOnet Tariff Signal", "", 230);
+			$var_Id = $this->RegisterVariableFloat("selData_TariffSignal", "INNOnet Tariff Signal", "", 211);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}
+		}			
+
+		if($parse_AWTAT_tid_HLAT) {
+			$var_Id = $this->RegisterVariableFloat("selData_AWTAT_HLAT", "AWTAT Marktpreis", "INNOnet.Cent.4", 220);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}
+		}
+
+		if($parse_AWTAT_tid_HLAT_Fee) {
+			$var_Id = $this->RegisterVariableFloat("selData_AWTAT_HLAT_Fee", "AWTAT Fee", "INNOnet.Cent.4", 221);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}
+		}
+
+		if($parse_AWTAT_tid_HLAT_Vat) {
+			$var_Id = $this->RegisterVariableFloat("selData_AWTAT_HLAT_Vat", "AWTAT Vat", "INNOnet.Cent.4", 222);
 			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
 				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
 			}
 		}		
+
+		if($parse_AWTAT_tid_HLAT_SUM) {
+			$var_Id = $this->RegisterVariableFloat("selData_AWTAT_HLAT_BRUTTO", "AWTAT BRUTTO", "INNOnet.Cent.4", 223);
+			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
+				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
+			}
+		}			
 
 		if($parse_obisLieferung) {
-			$var_Id = $this->RegisterVariableFloat("selData_ObisLieferung", "obis Bezug Reststrom", "INNOnet.kWh", 240);
+			$var_Id = $this->RegisterVariableFloat("selData_ObisBezug", "obis Bezug Reststrom", "INNOnet.kWh", 240);
 			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
 				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
 			}
-			$var_Id = $this->RegisterVariableFloat("selData_ObisLieferung_SUM", "obis Bezug Reststrom SUM", "INNOnet.kWh", 250);
+			$var_Id = $this->RegisterVariableFloat("selData_ObisBezug_SUM", "obis Bezug Reststrom SUM", "INNOnet.kWh", 250);
 			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
 				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
 				AC_SetAggregationType($this->archivInstanzID, $var_Id, 1);
@@ -477,11 +506,11 @@ class INNOnet extends IPSModule {
 		}	
 		
 		if($parse_obisBezug) {
-			$var_Id = $this->RegisterVariableFloat("selData_ObisBezug", "obis Einspeisung Energielieferanten", "INNOnet.kWh", 241);
+			$var_Id = $this->RegisterVariableFloat("selData_ObisLieferung", "obis Einspeisung Energielieferanten", "INNOnet.kWh", 241);
 			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
 				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
 			};
-			$var_Id = $this->RegisterVariableFloat("selData_ObisBezug_SUM", "obis Einspeisung Energielieferanten SUM", "INNOnet.kWh", 251);
+			$var_Id = $this->RegisterVariableFloat("selData_ObisLieferung_SUM", "obis Einspeisung Energielieferanten SUM", "INNOnet.kWh", 251);
 			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
 				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
 				AC_SetAggregationType($this->archivInstanzID, $var_Id, 1);
@@ -489,19 +518,19 @@ class INNOnet extends IPSModule {
 
 		}	
 		
-		if($parse_EnergyCommunity) {
-			$var_Id = $this->RegisterVariableFloat("selData_ObisEegErzeugung", "obis Einspeisung GESAMT", "INNOnet.kWh", 242);
+		if($parse_obisEnergyCommunity) {
+			$var_Id = $this->RegisterVariableFloat("selData_ObisLieferungTotal", "obis Einspeisung GESAMT", "INNOnet.kWh", 242);
 			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
 				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
 			}
-			$var_Id = $this->RegisterVariableFloat("selData_ObisEegErzeugung_SUM", "obis Einspeisung GESAMT SUM", "INNOnet.kWh", 252);
+			$var_Id = $this->RegisterVariableFloat("selData_ObisLieferungTotal_SUM", "obis Einspeisung GESAMT SUM", "INNOnet.kWh", 252);
 			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
 				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 
 				AC_SetAggregationType($this->archivInstanzID, $var_Id, 1);				
 			}					
 		}	
 		
-		if($calc_EEG) {
+		if($calc_obisEEG) {
 			$var_Id = $this->RegisterVariableFloat("selData_ObisEEG_Calc", "obis Einspeisung EEG CALC", "INNOnet.kWh", 243);
 			if(!AC_GetLoggingStatus($this->archivInstanzID, $var_Id)) {	
 				AC_SetLoggingStatus($this->archivInstanzID, $var_Id, true); 

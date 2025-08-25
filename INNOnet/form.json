@@ -89,22 +89,28 @@
                 },
                 {
                     "type": "CheckBox",
-                    "caption": "aWATTar Energie",
+                    "caption": "AWTAT HLAT",
                     "enabled": true,
-                    "name": "cb_SelectedData_aWATTarEnergy"
+                    "name": "cb_SelectedData_AWTAT_tid_HLAT"
                 },
                 {
                     "type": "CheckBox",
-                    "caption": "aWATTar Fee",
+                    "caption": "AWTAT HLAT Fee",
                     "enabled": true,
-                    "name": "cb_SelectedData_aWATTarFee"
+                    "name": "cb_SelectedData_AWTAT_tid_HLAT_Fee"
                 },
                 {
                     "type": "CheckBox",
-                    "caption": "aWATTar VAT",
+                    "caption": "AWTAT HLAT Vat",
                     "enabled": true,
-                    "name": "cb_SelectedData_aWATTarVat"
+                    "name": "cb_SelectedData_AWTAT_tid_HLAT_Vat"
                 },
+                {
+                    "type": "CheckBox",
+                    "caption": "AWTAT HLAT SUM CALC",
+                    "enabled": true,
+                    "name": "cb_SelectedData_AWTAT_tid_HLAT_SUM"
+                },                
                 {
                     "type": "CheckBox",
                     "caption": "Tarif Signal",
@@ -200,6 +206,14 @@
             "label": "Update Timeseries Tariff-Signal (ohne AddLoggedValue)",
             "onClick": "INNOnet_TariffSignal_TimeSeriesCollection_UPDATE($id, 'ModulForm', false);"
         },
+
+
+        {
+            "type": "Button",
+            "label": "SelectedData_TimeSeriesCollection_NEW (mit AddLoggedValue)",
+            "onClick": "INNOnet_SelectedData_TimeSeriesCollection_NEW($id, NULL, NULL, 'ModulForm', true);"
+        },
+
         {
             "type": "Button",
             "label": "Update Timeseriescollection-Selecteddata (mit AddLoggedValue)",
@@ -229,7 +243,13 @@
             "type": "Button",
             "caption": "Get Timer Info",
             "onClick": "INNOnet_GetTimerInfo($id, 'ModulForm', true);"
+        },
+        {
+            "type": "Button",
+            "caption": "Create Media Charts",
+            "onClick": "INNOnet_CreateMediaCharts($id, 'ModulForm');"
         }
+
     ],
     "status": [
         {

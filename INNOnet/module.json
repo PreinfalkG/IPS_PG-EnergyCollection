@@ -4,8 +4,7 @@
     "type": 3,
     "vendor": "INNOnet",
     "aliases": [
-        "INNOnet Project",
-        "Netztarif"
+        "INNOnet Project"
     ],
     "parentRequirements": [],
     "childRequirements": [],

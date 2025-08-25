@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-
 trait INNOnet_FUNCTIONS {
 
 
@@ -318,7 +317,8 @@ trait INNOnet_FUNCTIONS {
 				$this->AddLog(__FUNCTION__, sprintf("Selected-Data API Request [Trigger > %s]\n - QueryFrom [ATOM]: %s\n - QueryTo [ATOM]: %s [modifier: %s | queryExitDate: %s]\n", $caller, $queryFrom->format(DateTime::ATOM), $queryTo->format(DateTime::ATOM), $modifier, $queryExitDate->format(DateTime::ATOM)));
 			} 
 
-			$result = $this->SelectedData_TimeSeriesCollection($queryFrom, $queryTo, __FUNCTION__, $addValuesToArchiv);
+			//$result = $this->SelectedData_TimeSeriesCollection($queryFrom, $queryTo, __FUNCTION__, $addValuesToArchiv);
+			$result = $this->SelectedData_TimeSeriesCollection_NEW($queryFrom, $queryTo, __FUNCTION__, $addValuesToArchiv);
 
 			if($result === true) {
 				$this->IncreaseCounterVar("SelectedData_Ok");
@@ -334,6 +334,336 @@ trait INNOnet_FUNCTIONS {
 		return $returnValue;
 	}
 
+	public function SelectedData_TimeSeriesCollection_NEW(?DateTimeImmutable $fromDateTime = null, ?DateTimeImmutable $toDateTime = null, string $caller = '?', bool $addValuesToArchiv = false) {
+		
+		$resultOk = true;
+		
+		if(is_null($fromDateTime)) { 
+			$fromDateTime =  new DateTimeImmutable('first day of last month');
+			$fromDateTime = $fromDateTime->setTimezone($this->local_timezone);
+			$fromDateTime = $fromDateTime->setTime(0, 0, 0);
+			$toDateTime = $fromDateTime->setTime(23, 59, 59);
+
+			if ($this->logLevel >= LogLevel::TRACE) {
+				$this->AddLog(__FUNCTION__, sprintf("fromDateTime: %s | toDateTime: %s", $fromDateTime->format('Y-m-d H:i:s T'), $toDateTime->format('Y-m-d H:i:s T')));
+			}
+		}
+
+		try {
+
+			$apiKey = $this->ReadPropertyString("tb_APIKEY");
+			$queryFromParameter = $fromDateTime->setTimezone($this->utc_timezone)->format('Y-m-d\TH:i:s\Z');
+			$queryToParameter = $toDateTime->setTimezone($this->utc_timezone)->format('Y-m-d\TH:i:s\Z');
+			$apiUrlSelectedData = sprintf("https://app-innonnetwebtsm-dev.azurewebsites.net/api/extensions/timeseriesauthorization/repositories/INNOnet-prod/apikey/%s/timeseriescollections/selected-data?from=%s&to=%s", $apiKey, $queryFromParameter, $queryToParameter);
+
+			$dataArr = null;
+
+			if(true) {
+				$responseData = $this->RequestAPI(__FUNCTION__, $apiUrlSelectedData);
+			} else {
+				$jsonfilePath = IPS_GetKernelDir() . 'logs\INNOnet.json';
+				if ($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, sprintf("JSON File Path: %s ", $jsonfilePath)); }
+				$responseData = file_get_contents($jsonfilePath);
+			}
+
+			if($responseData === false) {
+                if ($this->logLevel >= LogLevel::ERROR) { $this->AddLog(__FUNCTION__, "API ERROR 'SelectedData' > failed to get data"); }
+				return false;
+			} 
+			
+			$dataArr = json_decode($responseData, true); 
+  			if (json_last_error() !== JSON_ERROR_NONE) {
+                if ($this->logLevel >= LogLevel::ERROR) { $this->AddLog(__FUNCTION__, sprintf("API ERROR 'SelectedData' > JSON decode error 'SelectedData': %s", json_last_error_msg())); }
+                return false;
+            }
+			if ($dataArr === null) {
+                if ($this->logLevel >= LogLevel::ERROR) { $this->AddLog(__FUNCTION__, "API ERROR 'SelectedData' > dataArr is NULL"); }
+                return false;
+            }
+
+			$mappingArr = [];
+			$dataPointsArr = [];
+
+			if ($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, sprintf("Parse 'SelectedData' from %s to %s", $queryFromParameter, $queryToParameter)); }
+
+            foreach ($dataArr as $dataEntry) {
+                if (!isset($dataEntry['ID'], $dataEntry['Name'], $dataEntry['Data']['Data'])) {
+					$resultOk = false;
+					if ($this->logLevel >= LogLevel::ERROR) { $this->AddLog(__FUNCTION__, "Json Struktur Problem > [ID] | [Name] | [Data][Data] not set"); }
+                    continue; 
+                }
+
+				$id = $dataEntry['ID'];
+				$elemName = $dataEntry['Name'];
+				$dataCnt = count($dataEntry['Data']['Data']);
+				if ($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("'%s' = ID '%s' with %s Datansätze", $elemName, $id, $dataCnt)); }
+
+				$elemMappingArr =  $this->SelectedData_TimeSeriesCollection_GetMapping($id, $elemName);
+
+				$elemNameShort = $elemMappingArr["ElemNameShort"];
+				$varIdent = $elemMappingArr["varIdent"];
+				$varId = $this->GetIDForIdent($varIdent);
+				$varIdent_SUM = $elemMappingArr["varIdent_SUM"];
+				$varId_SUM = -1;
+				if(!is_null($varIdent_SUM)) { $varId_SUM = $this->GetIDForIdent($varIdent_SUM); }
+				$factor = $elemMappingArr["factor"];
+				$modulFormCheckBoxName = $elemMappingArr["modulFormCheckBoxName"];
+				
+				$mappingArr[$elemNameShort] = $elemMappingArr;
+
+				$dataItemCnt = 0;
+				$value_SUM = 0;
+				$ipsArchivArr = [];
+				$ipsArchivArr_SUM = [];
+
+				foreach($dataEntry['Data']['Data'] as $dataItem) {
+					$from = new DateTimeImmutable($dataItem['From']);
+					$from = $from->setTimezone($this->local_timezone);
+					$value = floatval($dataItem["Value"]); 
+					$value = $value * $factor;
+				
+					if ($this->logLevel >= LogLevel::TRACE) { $this->AddLog(__FUNCTION__, sprintf("%s :: %s | %s", $elemNameShort, $from->format('Y-m-d H:i:s T'), $value)); }	
+					
+					$ipsArchivArr[] = ['TimeStamp' => $from->getTimestamp(), 'Value' => $value];
+
+					if($varId_SUM > 0) {
+						$value_SUM = $value_SUM + $value;
+						if($dataItemCnt == 0) { $dataPointsArr[$id]["SUM"][] = ['TimeStamp' => $from->getTimestamp()-1, 'Value' => 0]; }
+						$ipsArchivArr_SUM[] = ['TimeStamp' => $from->getTimestamp(), 'Value' => $value_SUM];
+					}
+					$dataItemCnt++;
+				}				
+
+				$dataPointsArr[$elemNameShort]["RAW"] = $ipsArchivArr;
+				$dataPointsArr[$elemNameShort]["SUM"] = $ipsArchivArr_SUM;
+
+				if($addValuesToArchiv) { 
+
+					$modulFormCheckBox = $this->ReadPropertyBoolean($modulFormCheckBoxName);
+					if($modulFormCheckBox) {
+		
+						$result = AC_AddLoggedValues($this->archivInstanzID, $varId, $ipsArchivArr); 			
+						if($result) {
+							SetValueInteger($this->GetIDForIdent("SelectedData_LastUpdate"), time());
+							if($this->logLevel >= LogLevel::INFO) {  $this->AddLog(__FUNCTION__, sprintf("AC_AddLoggedValues %d Entries added for VarIdent '%s' [%d]", count($ipsArchivArr), $varIdent, $varId)); }
+						} else {
+							if($this->logLevel >= LogLevel::ERROR) {  $this->AddLog(__FUNCTION__, sprintf("ERROR on AC_AddLoggedValues for VarIdent '%s'", $varIdent)); }
+							$resultOk = false;
+						}
+
+						if($varId_SUM > 0) {
+							$result = AC_AddLoggedValues($this->archivInstanzID, $varId_SUM, $ipsArchivArr_SUM); 			
+							if($result) {
+								SetValueInteger($this->GetIDForIdent("SelectedData_LastUpdate"), time());
+								if($this->logLevel >= LogLevel::INFO) {  $this->AddLog(__FUNCTION__, sprintf("AC_AddLoggedValues %d Entries added for VarIdent '%s' [%d]", count($ipsArchivArr_SUM), $varIdent_SUM, $varId_SUM)); }
+							} else {
+								if($this->logLevel >= LogLevel::ERROR) {  $this->AddLog(__FUNCTION__, sprintf("ERROR on AC_AddLoggedValues for VarIdent '%s'", $varIdent_SUM)); }
+								$resultOk = false;
+							}						
+						}
+					} else {
+						if($this->logLevel >= LogLevel::INFO) {  $this->AddLog(__FUNCTION__, sprintf("CheckBox '%s' is FALSE {SKIP saving %d Entries for VarIdent '%s' [%d]}", $modulFormCheckBoxName, count($ipsArchivArr), $varIdent, $varId)); }
+					}
+
+				} else {
+					if($this->logLevel >= LogLevel::INFO) {  $this->AddLog(__FUNCTION__, sprintf("AddValuestoArchiv is FALSE {SKIP saving %d Entries for VarIdent '%s' [%d]}", count($ipsArchivArr), $varIdent, $varId)); }
+				}
+			}
+
+			if($this->ReadPropertyBoolean("cb_SelectedData_AWTAT_tid_HLAT_SUM")) {
+
+				$AWTAT_HLAT_SUM_CALC = [];
+
+				$dataArr_awtat_HLAT = $dataPointsArr[SELF::awtat_HLAT]["RAW"];
+				$dataArr_awtat_HLATFee = $dataPointsArr[SELF::awtat_HLATFee]["RAW"];				
+				$dataArr_awtat_HLATVat = $dataPointsArr[SELF::awtat_HLATVat]["RAW"];
+
+				if (count($dataArr_awtat_HLAT) !== count($dataArr_awtat_HLATFee) || count($dataArr_awtat_HLATFee) !== count($dataArr_awtat_HLATVat)) {
+					if ($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "AWTAT Unequal number of elements 'HALT' | 'HALTFee' | 'HALTVat'. Total price cannot be calculated."); }	
+				} else {
+					$awtat_HALT_Map = [];
+					foreach ($dataArr_awtat_HLAT as $item) {
+						$awtat_HALT_Map[$item['TimeStamp']] = $item['Value'];
+					}
+					$awtat_HALTFee_Map = [];
+					foreach ($dataArr_awtat_HLATFee as $item) {
+						$awtat_HALTFee_Map[$item['TimeStamp']] = $item['Value'];
+					}	
+					$awtat_HALTVat_Map = [];
+					foreach ($dataArr_awtat_HLATVat as $item) {
+						$awtat_HALTVat_Map[$item['TimeStamp']] = $item['Value'];
+					}										
+				
+					//IPS_LogMessage("awtat_HALT_Map", print_r($awtat_HALT_Map, true));
+					//IPS_LogMessage("awtat_HALTFee_Map", print_r($awtat_HALTFee_Map, true));
+					//IPS_LogMessage("awtat_HALTVat_Map", print_r($awtat_HALTVat_Map, true));
+
+					foreach ($awtat_HALT_Map as $timestamp => $awtatHALT_Value) {
+						if (isset($awtat_HALTFee_Map[$timestamp])) {
+							$awtatHLATFee_Value = $awtat_HALTFee_Map[$timestamp];
+							if (isset($awtat_HALTVat_Map[$timestamp])) {
+								$awtatHLATVat_Value = $awtat_HALTVat_Map[$timestamp];
+								$awtat_HLAT_SUM = $awtatHALT_Value + $awtatHLATFee_Value + $awtatHLATVat_Value;
+								$AWTAT_HLAT_SUM_CALC[] = ['TimeStamp' => $timestamp, 'Value' => $awtat_HLAT_SUM];
+								if ($this->logLevel >= LogLevel::TEST) { 		
+									$logMsg =  sprintf("%s :: HALT: %s | Fee: %s | Vat: %s | SUM: %s", $timestamp, print_r($awtatHALT_Value, true), print_r($awtatHLATFee_Value, true), print_r($awtatHLATVat_Value, true), print_r($awtat_HLAT_SUM, true));
+									$this->AddLog(__FUNCTION__, $logMsg);
+								}
+							} else {
+								if ($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, sprintf("DataArr 'AWTAT_HALATVat' has no Entry for 'Timestamp'", $timestamp)); }	
+							}
+						} else {
+							if ($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, sprintf("DataArr 'AWTAT_HALATFee' has no Entry for 'Timestamp'", $timestamp)); }	
+						}
+					}
+
+					if($addValuesToArchiv) { 
+						$varIdent = "selData_AWTAT_HLAT_BRUTTO";
+						$varId = $this->GetIDForIdent($varIdent);
+						$result = AC_AddLoggedValues($this->archivInstanzID, $varId, $AWTAT_HLAT_SUM_CALC); 			
+						if($result) {
+							if($this->logLevel >= LogLevel::INFO) {  $this->AddLog(__FUNCTION__, sprintf("AC_AddLoggedValues %d Entries added for VarIdent '%s' [%d]", count($AWTAT_HLAT_SUM_CALC), $varIdent, $varId)); }
+						} else {
+							if($this->logLevel >= LogLevel::ERROR) {  $this->AddLog(__FUNCTION__, sprintf("ERROR on AC_AddLoggedValues for VarIdent '%s'", $varIdent)); }
+						}	
+					}	
+
+				}
+			}
+
+
+			if($this->ReadPropertyBoolean("cb_SelectedData_obisEegCALC")) {
+
+				$obisEeg_CALC = [];
+				$obisEeg_CALC_SUM = [];
+
+				$dataArr_obisLieferung = $dataPointsArr[SELF::obis_Lieferung]["RAW"];
+				$dataArr_obisLieferungTotal = $dataPointsArr[SELF::obis_LieferungTotal]["RAW"];
+
+				if (empty($dataArr_obisLieferung)) {
+					if ($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "DataArr 'obisLieferung' is empty > can not CALC EEG Einspeisung"); }		
+				} else {
+					if(empty($dataArr_obisLieferungTotal)) {
+						if ($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "DataArr 'obisLieferungTotal' is empty > can not CALC EEG Einspeisung"); }										
+					} else {
+						$obisLieferungCnt = count($dataArr_obisLieferung);
+						$obisLieferungTotalCnt = count($dataArr_obisLieferungTotal);
+
+						//IPS_LogMessage("dataArr_obisLieferung", print_r($dataArr_obisLieferung, true));
+						//IPS_LogMessage("dataArr_obisLieferungTotal", print_r($dataArr_obisLieferungTotal, true));
+						if ($obisLieferungCnt != $obisLieferungTotalCnt) {
+							if ($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, sprintf("DataArr count 'obisLieferung: %s' != 'obisLieferungTotal %s' > can not CALC EEG Einspeisung", $obisLieferungCnt, $obisLieferungTotalCnt)); }	
+						} else {
+
+							$calcCnt = 0;
+							$value_SUM = 0;
+
+							$obisLieferungMap = [];
+							foreach ($dataArr_obisLieferung as $item) {
+								$obisLieferungMap[$item['TimeStamp']] = $item['Value'];
+							}
+
+							foreach ($dataArr_obisLieferungTotal as $itemTotal) {
+								$timestamp = $itemTotal['TimeStamp'];
+								$valueTotal = $itemTotal['Value'];
+
+								if (isset($obisLieferungMap[$timestamp])) {
+									$valueLieferung = $obisLieferungMap[$timestamp];
+									$diffValue = $valueTotal - $valueLieferung;
+									$obisEeg_CALC[] = ['TimeStamp' => $timestamp, 'Value' => $diffValue];
+
+									$value_SUM = $value_SUM + $diffValue;
+									if($calcCnt == 0) {
+										$obisEeg_CALC_SUM[] = ['TimeStamp' => $timestamp-1, 'Value' => 0];	
+									}
+									$obisEeg_CALC_SUM[] = ['TimeStamp' => $timestamp, 'Value' => $value_SUM];
+									$calcCnt++;
+								} else {
+									if ($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "DataArr 'dataArr_obisLieferung' has no Value for 'Timestamp'"); }	
+								}
+							}
+
+							//IPS_LogMessage("obisEeg_CALC", print_r($obisEeg_CALC, true));
+							//IPS_LogMessage("obisEeg_CALC_SUM", print_r($obisEeg_CALC_SUM, true));
+							if($addValuesToArchiv) { 
+								$varIdent = "selData_ObisEEG_Calc";
+								$varId = $this->GetIDForIdent($varIdent);
+								$result = AC_AddLoggedValues($this->archivInstanzID, $varId, $obisEeg_CALC); 			
+								if($result) {
+									if($this->logLevel >= LogLevel::INFO) {  $this->AddLog(__FUNCTION__, sprintf("AC_AddLoggedValues %d Entries added for VarIdent '%s' [%d]", count($obisEeg_CALC), $varIdent, $varId)); }
+								} else {
+									if($this->logLevel >= LogLevel::ERROR) {  $this->AddLog(__FUNCTION__, sprintf("ERROR on AC_AddLoggedValues for VarIdent '%s'", $varIdent)); }
+								}		
+								
+								$varIdent = "selData_ObisEEG_CalcSUM";
+								$varId = $this->GetIDForIdent($varIdent);
+								$result = AC_AddLoggedValues($this->archivInstanzID, $varId, $obisEeg_CALC_SUM); 			
+								if($result) {
+									if($this->logLevel >= LogLevel::INFO) {  $this->AddLog(__FUNCTION__, sprintf("AC_AddLoggedValues %d Entries added for VarIdent '%s' [%d]", count($obisEeg_CALC_SUM), $varIdent, $varId)); }
+								} else {
+									if($this->logLevel >= LogLevel::ERROR) {  $this->AddLog(__FUNCTION__, sprintf("ERROR on AC_AddLoggedValues for VarIdent '%s'", $varIdent)); }
+								}												
+
+							}
+						}
+					}
+				}	
+			}
+				
+           if ($this->logLevel >= LogLevel::DEBUG) { $this->AddLog(__FUNCTION__, "SelectedData Update Ok"); }
+
+        } catch (Exception $e) {
+            $this->HandleError(__FUNCTION__, sprintf("Exception: %s", $e->getMessage()));
+            $resultOk = false;
+        }
+
+        return $resultOk;
+	}
+
+	public function SelectedData_TimeSeriesCollection_GetMapping(int $id, string $elemName) {
+
+
+			$mappingArr = [];
+
+			if(str_starts_with($elemName, SELF::INNOnetTariff)) {
+				$varIdent = "selData_INNOnetTariff";
+				$varIdent_SUM = null;
+				$mappingArr = ["ID" => $id, "varIdent" => $varIdent, "varIdent_SUM" => $varIdent_SUM, "factor" => 1, "ElemNameOrg" => $elemName, "ElemNameShort" => SELF::INNOnetTariff, "modulFormCheckBoxName" => "cb_SelectedData_InnonetTarif" ];
+			} else if(str_starts_with($elemName, SELF::INNOnetTariffSignal)) {
+				$varIdent = "selData_TariffSignal";
+				$varIdent_SUM = null;
+				$mappingArr = ["ID" => $id, "varIdent" => $varIdent, "varIdent_SUM" => $varIdent_SUM, "factor" => 1, "ElemNameOrg" => $elemName, "ElemNameShort" => SELF::INNOnetTariffSignal, "modulFormCheckBoxName" => "cb_SelectedData_TariffSignal" ];
+			} else if(str_ends_with($elemName, SELF::awtat_HLAT)) {
+				$varIdent = "selData_AWTAT_HLAT";
+				$varIdent_SUM = null;
+				$mappingArr = ["ID" => $id, "varIdent" => $varIdent, "varIdent_SUM" => $varIdent_SUM, "factor" => 100, "ElemNameOrg" => $elemName, "ElemNameShort" => SELF::awtat_HLAT, "modulFormCheckBoxName" => "cb_SelectedData_AWTAT_tid_HLAT" ];			
+			} else if(str_ends_with($elemName, SELF::awtat_HLATFee)) {
+				$varIdent = "selData_AWTAT_HLAT_Fee";
+				$varIdent_SUM = null;
+				$mappingArr = ["ID" => $id, "varIdent" => $varIdent, "varIdent_SUM" => $varIdent_SUM, "factor" => 100, "ElemNameOrg" => $elemName, "ElemNameShort" => SELF::awtat_HLATFee, "modulFormCheckBoxName" => "cb_SelectedData_AWTAT_tid_HLAT_Fee" ];					
+			} else if(str_ends_with($elemName, SELF::awtat_HLATVat)) {
+				$varIdent = "selData_AWTAT_HLAT_Vat";
+				$varIdent_SUM = null;
+				$mappingArr = ["ID" => $id, "varIdent" => $varIdent, "varIdent_SUM" => $varIdent_SUM, "factor" => 100, "ElemNameOrg" => $elemName, "ElemNameShort" => SELF::awtat_HLATVat, "modulFormCheckBoxName" => "cb_SelectedData_AWTAT_tid_HLAT_Vat" ];				
+			} else if(str_ends_with($elemName, SELF::obis_Bezug)) {
+				$varIdent = "selData_ObisBezug";
+				$varIdent_SUM = "selData_ObisBezug_SUM";
+				$mappingArr = ["ID" => $id, "varIdent" => $varIdent, "varIdent_SUM" => $varIdent_SUM, "factor" => 1, "ElemNameOrg" => $elemName, "ElemNameShort" => SELF::obis_Bezug, "modulFormCheckBoxName" => "cb_SelectedData_obisBezug" ];		
+			} else if(str_ends_with($elemName, SELF::obis_Lieferung)) {
+				$varIdent = "selData_ObisLieferung";
+				$varIdent_SUM = "selData_ObisLieferung_SUM";
+				$mappingArr = ["ID" => $id, "varIdent" => $varIdent, "varIdent_SUM" => $varIdent_SUM, "factor" => 1, "ElemNameOrg" => $elemName, "ElemNameShort" => SELF::obis_Lieferung, "modulFormCheckBoxName" => "cb_SelectedData_obisLieferung" ];		
+			} else if(str_ends_with($elemName, SELF::obis_LieferungTotal)) {
+				$varIdent = "selData_ObisLieferungTotal";
+				$varIdent_SUM = "selData_ObisLieferungTotal_SUM";
+				$mappingArr = ["ID" => $id, "varIdent" => $varIdent, "varIdent_SUM" => $varIdent_SUM, "factor" => 1, "ElemNameOrg" => $elemName, "ElemNameShort" => SELF::obis_LieferungTotal, "modulFormCheckBoxName" => "cb_SelectedData_obisEnergyCommunity" ];
+			}
+
+		return $mappingArr;
+
+	}
+
+	/*
 	public function SelectedData_TimeSeriesCollection(?DateTimeImmutable $fromDateTime=null, ?DateTimeImmutable $toDateTime=null, string $caller = '?', bool $addValuesToArchiv=false) {
 
 		$resultOk = true;
@@ -409,15 +739,15 @@ trait INNOnet_FUNCTIONS {
 								$this->SelectedData_TimeSeriesCollection_ExtractValues($dataArrElem, $INNOnetTariff, "selData_INNOnetTariff", "", 1, $addValuesToArchiv);
 							} else { if($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $INNOnetTariff)); } }
 						} else if(str_ends_with($elemName, $aWATTar_Marketprice)) {
-							if($this->ReadPropertyBoolean("cb_SelectedData_aWATTarEnergy")) {
+							if($this->ReadPropertyBoolean("cb_SelectedData_AWTAT_tid_HLAT")) {
 								$this->SelectedData_TimeSeriesCollection_ExtractValues($dataArrElem, $aWATTar_Marketprice, "selData_aWATTarMarketprice", "", 100, $addValuesToArchiv);
 							} else { if($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $aWATTar_Marketprice)); } }
 						} else if(str_ends_with($elemName, $aWATTar_Fee)) {
-							if($this->ReadPropertyBoolean("cb_SelectedData_aWATTarFee")) {
+							if($this->ReadPropertyBoolean("cb_SelectedData_AWTAT_tid_HLAT_Fee")) {
 								$this->SelectedData_TimeSeriesCollection_ExtractValues($dataArrElem, $aWATTar_Fee, "selData_aWATTarFee", "", 100, $addValuesToArchiv);
 							} else { if($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $aWATTar_Fee)); } }
 						} else if(str_ends_with($elemName, $aWATTar_Vat)) {
-							if($this->ReadPropertyBoolean("cb_SelectedData_aWATTarVat")) {
+							if($this->ReadPropertyBoolean("cb_SelectedData_AWTAT_tid_HLAT_Vat")) {
 								$this->SelectedData_TimeSeriesCollection_ExtractValues($dataArrElem, $aWATTar_Vat, "selData_aWATTarVat", "", 100, $addValuesToArchiv);
 							} else { if($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("ExtractValues for '%s' is disabled", $aWATTar_Vat)); } }
 						} else if(str_starts_with($elemName, $INNOnetTariffSignal)) {
@@ -611,6 +941,7 @@ trait INNOnet_FUNCTIONS {
 
 
 	}
+	*/
 
     public function RequestAPI(string $caller, string $apiURL) {
 
@@ -734,5 +1065,235 @@ trait INNOnet_FUNCTIONS {
         return $returnValue;
     }
 
+	public function CreateMediaCharts(string $sender) {
 
+		$jsonContent = json_encode($this->GetMediaChartConfig_INNOnetTarif());
+		$this->CreateMediaChart("INNOnet_Tarif", "INNOnet Tarif & Tarifsignal", 10, "INNOnetTarif.chart", $jsonContent);
+
+		$jsonContent = json_encode($this->GetMediaChartConfig_INNOnet_AWTAT());
+		$this->CreateMediaChart("INNOnet_AWTAT", "INNOnet AWTAT HLAT", 11, "AWTAT_HLAT.chart", $jsonContent);
+
+		$jsonContent = json_encode($this->GetMediaChartConfig_ObisLine());
+		$this->CreateMediaChart("OBIS_Line", "INNOnet OBIS Line", 15, "ObisLine.chart", $jsonContent);
+
+		$jsonContent = json_encode($this->GetMediaChartConfig_ObisSUM());
+		$this->CreateMediaChart("OBIS_SUM", "INNOnet OBIS SUM", 16, "ObisSUM.chart", $jsonContent);
+
+	}
+
+	protected function CreateMediaChart(string $chartIdent="null", string $chartName="null", int $position=0, string $fileName="null.null", string $contentAsJson="" ) {
+		$parentID = IPS_GetParent($this->InstanceID);
+
+        $chartID = @IPS_GetObjectIDByIdent($chartIdent, $parentID);
+        if($chartID === false) {
+            $chartID = IPS_CreateMedia(4);
+            if ($chartID === true) {
+				if ($this->logLevel >= LogLevel::ERROR) { $this->AddLog(__FUNCTION__, "ERROR Creating IPS Media Chart!"); }
+                return;
+            }
+        }
+
+        IPS_SetIdent($chartID, $chartIdent);
+        IPS_SetName($chartID, $chartName);
+        IPS_SetParent($chartID, $parentID);
+        IPS_SetPosition($chartID, $position);
+
+        IPS_SetMediaFile($chartID, $fileName, False);
+        IPS_SetMediaContent($chartID, base64_encode($contentAsJson));
+	}
+
+
+	protected function GetMediaChartConfig_INNOnetTarif() {
+		$chartConfigArr = [
+			"datasets" => [
+				[
+					"variableID" => $this->GetIDForIdent("selData_INNOnetTariff"),
+					"fillColor" => "#c800ff",
+					"strokeColor" => "#c800ff",
+					"timeOffset" => 0,
+					"visible" => true,
+					"title" => "INNOnet Tarif",
+					"side" => "left"					
+				],
+				[
+					"variableID" => $this->GetIDForIdent("selData_TariffSignal"),
+					"fillColor" => "clear",
+					"strokeColor" => "#473aae",
+					"timeOffset" => 0,
+					"visible" => true,
+					"title" => "INNOnet Tarif Signal",					
+					"side" => "right"
+				]
+			]
+		];
+		return $chartConfigArr;
+	}
+
+	protected function GetMediaChartConfig_INNOnet_AWTAT() {
+		$chartConfigArr  = [
+			"datasets" => [
+				[
+					"variableID" => $this->GetIDForIdent("selData_AWTAT_HLAT"),
+					"fillColor" => "clear",
+					"strokeColor" => "#a421d4",
+					"timeOffset" => 0,
+					"visible" => true,
+					"title" => "aWATTar Markpreis Netto",						
+					"side" => "left"
+				],
+				[
+					"variableID" => $this->GetIDForIdent("selData_AWTAT_HLAT_Fee"),
+					"fillColor" => "clear",
+					"strokeColor" => "#2f3c5e",
+					"timeOffset" => 0,
+					"visible" => false,
+					"title" => "aWATTar Fee",						
+					"side" => "left"
+				],
+				[
+					"variableID" => $this->GetIDForIdent("selData_AWTAT_HLAT_Vat"),
+					"fillColor" => "clear",
+					"strokeColor" => "#8f8b8fff",
+					"timeOffset" => 0,
+					"visible" => false,
+					"title" => "aWATTar MwSt",						
+					"side" => "left"
+				],
+				[
+					"variableID" => $this->GetIDForIdent("selData_AWTAT_HLAT_BRUTTO"),
+					"fillColor" => "clear",
+					"strokeColor" => "#e06a09ff",
+					"timeOffset" => 0,
+					"visible" => true,
+					"title" => "aWATTar Brutto",						
+					"side" => "left"
+				],
+				[
+					"variableID" => $this->GetIDForIdent("selData_INNOnetTariff"),
+					"fillColor" => "#c800ff",
+					"strokeColor" => "#c800ff",
+					"timeOffset" => 0,
+					"visible" => false,
+					"title" => "INNOnet Tarif",
+					"side" => "left"					
+				],
+				[
+					"variableID" => $this->GetIDForIdent("selData_TariffSignal"),
+					"fillColor" => "clear",
+					"strokeColor" => "#473aae",
+					"timeOffset" => 0,
+					"visible" => false,
+					"title" => "INNOnet Tarif Signal",					
+					"side" => "right"
+				]				
+			]
+		];
+		return $chartConfigArr;
+	}
+
+	protected function GetMediaChartConfig_ObisLine() {
+		$chartConfigArr = [
+			"datasets" => [
+				[
+					"variableID" => $this->GetIDForIdent("selData_ObisBezug"),
+					"fillColor" => "clear",
+					"strokeColor" => "#c300ffff",
+					"timeOffset" => 0,
+					"visible" => true,
+					"title" => "obis Bezug Reststrom",
+					"side" => "left"
+				],
+				[
+					"variableID" => $this->GetIDForIdent("selData_ObisLieferung"),
+					"fillColor" => "clear",
+					"strokeColor" => "#11c9b9ff",
+					"timeOffset" => 0,
+					"visible" => true,
+					"title" => "obis Einspeisung Energielieferanten",
+					"side" => "left"
+				],
+				[
+					"variableID" => $this->GetIDForIdent("selData_ObisEEG_Calc"),
+					"fillColor" => "clear",
+					"strokeColor" => "#98e40cc4",
+					"timeOffset" => 0,
+					"visible" => true,
+					"title" => "obis Einspeisung EEG (CALC)",
+					"side" => "left"
+				],
+				[
+					"variableID" => $this->GetIDForIdent("selData_ObisLieferungTotal"),
+					"fillColor" => "clear",
+					"strokeColor" => "#fbff00ff",
+					"timeOffset" => 0,
+					"visible" => true,
+					"title" => "obis Einspeisung GESAMT",
+					"side" => "left"
+				],		
+				[
+					"variableID" => $this->GetIDForIdent("selData_INNOnetTariff"),
+					"fillColor" => "#c800ff",
+					"strokeColor" => "#c800ff",
+					"timeOffset" => 0,
+					"visible" => false,
+					"title" => "INNOnet Tarif",
+					"side" => "right"					
+				],
+				[
+					"variableID" => $this->GetIDForIdent("selData_TariffSignal"),
+					"fillColor" => "clear",
+					"strokeColor" => "#473aae",
+					"timeOffset" => 0,
+					"visible" => false,
+					"title" => "INNOnet Tarif Signal",					
+					"side" => "right"
+				]							
+			]
+		];
+		return $chartConfigArr;
+	}
+
+	protected function GetMediaChartConfig_ObisSUM() {
+		$chartConfigArr = [
+			"datasets" => [
+				[
+					"variableID" => $this->GetIDForIdent("selData_ObisBezug_SUM"),
+					"fillColor" => "#c300ffff",
+					"strokeColor" => "#c300ffff",
+					"timeOffset" => 0,
+					"visible" => true,
+					"title" => "obis Bezug Reststrom",
+					"side" => "left"
+				],
+				[
+					"variableID" => $this->GetIDForIdent("selData_ObisLieferung_SUM"),
+					"fillColor" => "#11c9b9ff",
+					"strokeColor" => "#11c9b9ff",
+					"timeOffset" => 0,
+					"visible" => true,
+					"title" => "obis Einspeisung Energielieferanten",
+					"side" => "left"
+				],
+				[
+					"variableID" => $this->GetIDForIdent("selData_ObisEEG_CalcSUM"),
+					"fillColor" => "#009e03",
+					"strokeColor" => "#009e03",
+					"timeOffset" => 0,
+					"visible" => true,
+					"title" => "obis Einspeisung EEG (CALC)",
+					"side" => "left"
+				],				
+				[
+					"variableID" => $this->GetIDForIdent("selData_ObisLieferungTotal_SUM"),
+					"fillColor" => "#fbff00ff",
+					"strokeColor" => "#fbff00ff",
+					"timeOffset" => 0,
+					"visible" => true,
+					"title" => "obis Einspeisung GESAMT",
+					"side" => "left"
+				]
+			]
+		];
+		return $chartConfigArr;
+	}
 }
