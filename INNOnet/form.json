@@ -89,6 +89,12 @@
                 },
                 {
                     "type": "CheckBox",
+                    "caption": "INNOnet Tarif Signal",
+                    "enabled": true,
+                    "name": "cb_SelectedData_TariffSignal"
+                },                
+                {
+                    "type": "CheckBox",
                     "caption": "AWTAT HLAT",
                     "enabled": true,
                     "name": "cb_SelectedData_AWTAT_tid_HLAT"
@@ -111,12 +117,6 @@
                     "enabled": true,
                     "name": "cb_SelectedData_AWTAT_tid_HLAT_SUM"
                 },                
-                {
-                    "type": "CheckBox",
-                    "caption": "Tarif Signal",
-                    "enabled": true,
-                    "name": "cb_SelectedData_TariffSignal"
-                },
                 {
                     "type": "CheckBox",
                     "caption": "OBIS Lieferung (Reststrombezug Energielieferanten)",
