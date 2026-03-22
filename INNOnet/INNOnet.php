@@ -60,7 +60,7 @@ trait INNOnet_FUNCTIONS {
 			SetValueInteger($this->GetIDForIdent("queryEndTS_TariffSignal"), $queryTo->getTimestamp());
 		} else {
 			$this->IncreaseCounterVar("TariffSignal_NotOk");
-			if ($this->logLevel >= LogLevel::WARM) { $this->AddLog(__FUNCTION__, "TariffSignal Update NOT Ok"); };
+			if ($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "TariffSignal Update NOT Ok"); };
 			$returnValue = -1;
 		}	
 
