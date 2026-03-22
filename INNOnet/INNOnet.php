@@ -24,7 +24,7 @@ trait INNOnet_FUNCTIONS {
 		} 
 
 		$queryFrom = new DateTimeImmutable('@' . $dateTimeFrom);
-		$queryFrom->setTimezone(new DateTimeZone('Europe/Vienna'));
+		$queryFrom = $queryFrom->setTimezone(new DateTimeZone('Europe/Vienna'));
 
 		$queryHours = $this->ReadPropertyInteger("ns_TariffSignal_OffsetHours");
 		$queryTo = $queryFrom->add(new DateInterval(sprintf('PT%sH', $queryHours)));
@@ -39,7 +39,7 @@ trait INNOnet_FUNCTIONS {
 
 		if($queryFrom > $dateTimeNow) {
 			$queryFrom = new DateTimeImmutable('today midnight');
-			$queryFrom->setTimezone(new DateTimeZone('Europe/Vienna'));
+			$queryFrom = $queryFrom->setTimezone(new DateTimeZone('Europe/Vienna'));
 			$queryTo = $queryFrom->add(new DateInterval(sprintf('PT%sH', $queryHours)));
 			$returnValue = 0;
 
@@ -246,7 +246,7 @@ trait INNOnet_FUNCTIONS {
 					}
 					/*
 						$lastDataRecord = new DateTimeImmutable('@' . $lastDataRecordTS);
-						$lastDataRecord->setTimezone(new DateTimeZone('Europe/Vienna'));
+						lastDataRecord = $lastDataRecord->setTimezone(new DateTimeZone('Europe/Vienna'));
 
 					if($lastDataRecordTS > 0) {
 						if($this->logLevel >= LogLevel::TEST) {  
@@ -294,7 +294,7 @@ trait INNOnet_FUNCTIONS {
 		} 
 
 		$queryFrom = new DateTimeImmutable('@' . $dateTimeFrom);
-		$queryFrom->setTimezone(new DateTimeZone('Europe/Vienna'));
+		$queryFrom = $queryFrom->setTimezone(new DateTimeZone('Europe/Vienna'));
 
 		$queryHours = $this->ReadPropertyInteger("ns_SelectedData_QueryHours");
 		$queryTo = $queryFrom->add(new DateInterval(sprintf('PT%sH', $queryHours)));
@@ -956,6 +956,7 @@ trait INNOnet_FUNCTIONS {
        if ($this->logLevel >= LogLevel::TEST) { $this->AddLog(__FUNCTION__, sprintf("Request API URL '%s' [Trigger: %s", $apiURL, $caller)); }
 
         $curlOptions = [
+			CURLOPT_CONNECTTIMEOUT => 10,
             CURLOPT_TIMEOUT => 28,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_SSL_VERIFYHOST => false,

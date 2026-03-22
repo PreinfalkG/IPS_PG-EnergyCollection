@@ -189,7 +189,7 @@ class INNOnet extends IPSModule {
 		if($timerNextInterval > 0) {
 			if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, sprintf("Set 'TimerSelectedData_INNOnet' for '%s' to %s sec", $this->InstanceID, $timerNextInterval)); }
 			$this->SetTimerInterval("TimerSelectedData_INNOnet", $timerNextInterval*1000);
-		} else if($secondsAferMidnight >= 0) {
+		} else if($secondsAferMidnight > 0) {
 			$timerDateTime = 0;
 			$seconds_since_midnight  = time() - strtotime('today midnight');
 
@@ -216,53 +216,64 @@ class INNOnet extends IPSModule {
 
 
 	public function TimerTariffSignal_INNOnet() {
-		if ($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "'TimerTariffSignal_INNOnet' called -> Update API Data 'TariffSignal' ..."); }
+		try {
+			if ($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "'TimerTariffSignal_INNOnet' called -> Update API Data 'TariffSignal' ..."); }
 
-		$tariffSignal_AutoUpdate = $this->ReadPropertyBoolean("cb_TariffSignal_EnableAutoUpdate");
-		if ($tariffSignal_AutoUpdate) {
-					
-			$result = $this->TariffSignal_TimeSeriesCollection_UPDATE(__FUNCTION__, true);
-			
-			if($result < 0) {
-				if($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "WARN: 'TariffSignal_TimeSeriesCollection_UPDATE' faild > try again in an hour"); }
-				$this->SetTimerTariffSignal(3600);
-			} else if ($result > 0) {
-				if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "'TariffSignal_TimeSeriesCollection_UPDATE' > More Data available"); }
-				$this->SetTimerTariffSignal(4);
+			$tariffSignal_AutoUpdate = $this->ReadPropertyBoolean("cb_TariffSignal_EnableAutoUpdate");
+			if ($tariffSignal_AutoUpdate) {
+						
+				$result = $this->TariffSignal_TimeSeriesCollection_UPDATE(__FUNCTION__, true);
+				
+				if($result < 0) {
+					if($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "WARN: 'TariffSignal_TimeSeriesCollection_UPDATE' faild > try again in an hour"); }
+					$this->SetTimerTariffSignal(3600);
+				} else if ($result > 0) {
+					if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "'TariffSignal_TimeSeriesCollection_UPDATE' > More Data available"); }
+					$this->SetTimerTariffSignal(4);
+				} else {
+					if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "'TariffSignal_TimeSeriesCollection_UPDATE' > No More Data available"); }
+					$this->SetTimerTariffSignal($this->tariffSignal_TimerInterval);
+				}
+
 			} else {
-				if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "'TariffSignal_TimeSeriesCollection_UPDATE' > No More Data available"); }
+				if ($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, sprintf("TariffSignal_EnableAutoUpdate Disabled -> SetTimerTariffSignal to default [%s sec]", $this->tariffSignal_TimerInterval)); }
 				$this->SetTimerTariffSignal($this->tariffSignal_TimerInterval);
 			}
-
-		} else {
-			if ($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, sprintf("TariffSignal_EnableAutoUpdate Disabled -> SetTimerTariffSignal to default [%s sec]", $this->tariffSignal_TimerInterval)); }
-			$this->SetTimerTariffSignal($this->tariffSignal_TimerInterval);
-		}
+		} catch (Exception $e) {
+			// Timer MUSS neu gesetzt werden, egal was passiert
+			$this->HandleError(__FUNCTION__, sprintf("Unhandled Exception: %s", $e->getMessage()));
+			$this->SetTimerTariffSignal(3600);  // retry nach 1 Stunde
+		}			
 
 	}
 
 	public function TimerSelectedData_INNOnet() {
-		if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "TimerSelectedData_INNOnet called -> Update API Data 'SelectedData' ..."); }
-		
-		$autoUpdate = $this->ReadPropertyBoolean("cb_SelectedData_EnableAutoUpdate");
-		if($autoUpdate) {
-
-			$result = $this->SelectedData_TimeSeriesCollection_UPDATE(__FUNCTION__, true);
+		try {
+			if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "TimerSelectedData_INNOnet called -> Update API Data 'SelectedData' ..."); }
 			
-			if($result < 0) {
-				if($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "WARN: 'SelectedData_TimeSeriesCollection_UPDATE' faild > try again in an hour"); }
-				$this->SetTimerSelectedData(3600, 0);
-			} else if ($result > 0) {
-				if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "'SelectedData_TimeSeriesCollection_UPDATE' > More Data available"); }
-				$this->SetTimerSelectedData(4, 0);
+			$autoUpdate = $this->ReadPropertyBoolean("cb_SelectedData_EnableAutoUpdate");
+			if($autoUpdate) {
+
+				$result = $this->SelectedData_TimeSeriesCollection_UPDATE(__FUNCTION__, true);
+				
+				if($result < 0) {
+					if($this->logLevel >= LogLevel::WARN) { $this->AddLog(__FUNCTION__, "WARN: 'SelectedData_TimeSeriesCollection_UPDATE' faild > try again in an hour"); }
+					$this->SetTimerSelectedData(3600, 0);
+				} else if ($result > 0) {
+					if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "'SelectedData_TimeSeriesCollection_UPDATE' > More Data available"); }
+					$this->SetTimerSelectedData(4, 0);
+				} else {
+					if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "'SelectedData_TimeSeriesCollection_UPDATE' > No More Data available"); }
+					$this->SetTimerSelectedData(0, $this->selectedData_SecondsAferMidnight);
+				}
 			} else {
-				if($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, "'SelectedData_TimeSeriesCollection_UPDATE' > No More Data available"); }
+				if ($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, sprintf("SelectedData_EnableAutoUpdate Disabled -> SetTimerSelectedData to default [%s sec]", $this->selectedData_SecondsAferMidnight)); }
 				$this->SetTimerSelectedData(0, $this->selectedData_SecondsAferMidnight);
 			}
-		} else {
-			if ($this->logLevel >= LogLevel::INFO) { $this->AddLog(__FUNCTION__, sprintf("SelectedData_EnableAutoUpdate Disabled -> SetTimerSelectedData to default [%s sec]", $this->selectedData_SecondsAferMidnight)); }
-			$this->SetTimerSelectedData(0, $this->selectedData_SecondsAferMidnight);
-		}
+		} catch (Exception $e) {
+			$this->HandleError(__FUNCTION__, sprintf("Unhandled Exception: %s", $e->getMessage()));
+			$this->SetTimerSelectedData(3600, 0);  // retry nach 1 Stunde
+		}			
 	}
 
 	
