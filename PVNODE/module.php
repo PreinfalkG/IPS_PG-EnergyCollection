@@ -311,11 +311,11 @@ class PVNODEForecast extends IPSModule
         $this->MaintainVariable('ErrorCount', 'Fehler in Folge', VARIABLETYPE_INTEGER, '', 3, true);
 
         $this->MaintainVariable('CurrentPower', 'Aktuelle Leistung (W)', VARIABLETYPE_FLOAT, '~Watt', 10, true);
-        $this->MaintainVariable('Next1h', 'Prognose nächste 1h (kWh)', VARIABLETYPE_FLOAT, '', 11, true);
-        $this->MaintainVariable('Next4h', 'Prognose nächste 4h (kWh)', VARIABLETYPE_FLOAT, '', 12, true);
-        $this->MaintainVariable('RemainingToday', 'Rest heute (kWh)', VARIABLETYPE_FLOAT, '', 13, true);
-        $this->MaintainVariable('TodayTotal', 'Tagesertrag heute ges. (kWh)', VARIABLETYPE_FLOAT, '', 14, true);
-        $this->MaintainVariable('Tomorrow', 'Tagesertrag morgen (kWh)', VARIABLETYPE_FLOAT, '', 15, true);
+        $this->MaintainVariable('Next1h', 'Prognose nächste 1h', VARIABLETYPE_FLOAT, '~Electricity', 11, true);
+        $this->MaintainVariable('Next4h', 'Prognose nächste 4h', VARIABLETYPE_FLOAT, '~Electricity', 12, true);
+        $this->MaintainVariable('RemainingToday', 'Rest heute', VARIABLETYPE_FLOAT, '~Electricity', 13, true);
+        $this->MaintainVariable('TodayTotal', 'Tagesertrag heute', VARIABLETYPE_FLOAT, '~Electricity', 14, true);
+        $this->MaintainVariable('Tomorrow', 'Tagesertrag morgen', VARIABLETYPE_FLOAT, '~Electricity', 15, true);
 
         // Wetter-Variablen immer anlegen: daily.weather_code/temp_min/temp_max liefert pvnode
         // erfahrungsgemäß auch ohne include=weather mit; die Variablen bleiben einfach leer/0,
