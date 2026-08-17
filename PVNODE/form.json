@@ -1,0 +1,60 @@
+{
+    "elements": [
+        {
+            "type": "Label",
+            "caption": "API-Key unter pvnode.com/settings/api-keys erzeugen, Site-ID unter pvnode.com/studio (bereits konfigurierte Anlage auswählen)."
+        },
+        {
+            "type": "PasswordTextBox",
+            "name": "APIKey",
+            "caption": "API-Key"
+        },
+        {
+            "type": "ValidationTextBox",
+            "name": "SiteID",
+            "caption": "Site-ID"
+        },
+        {
+            "type": "CheckBox",
+            "name": "IncludeWeather",
+            "caption": "Wetterdaten abrufen (Temperatur, Wettercode) - fällt bei fehlender Plan-Berechtigung automatisch auf reine Leistungsdaten zurück"
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "ForecastDays",
+            "caption": "Prognosehorizont in Tagen (0 = automatisch Planmaximum verwenden - empfohlen)",
+            "minimum": 0,
+            "maximum": 7
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "UpdateInterval",
+            "caption": "Abfrageintervall (Minuten)",
+            "minimum": 0,
+            "maximum": 1440
+        },
+        {
+            "type": "Label",
+            "caption": "Free-Plan: 250 Cache-Anfragen/Monat -> Intervall ≥ 180 Min empfohlen (≈240/Monat). Light/Plus: 3.000/Monat -> ab 15 Min möglich."
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "Timeout",
+            "caption": "Timeout (Sekunden)",
+            "minimum": 5,
+            "maximum": 60
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "Jetzt aktualisieren",
+            "onClick": "PVNODE_UpdateForecast($id);"
+        }
+    ],
+    "status": [
+        { "code": 102, "icon": "active", "caption": "Aktiv" },
+        { "code": 104, "icon": "inactive", "caption": "API-Key oder Site-ID fehlt" },
+        { "code": 201, "icon": "error", "caption": "Mehrfacher Abruffehler - Status-Variable prüfen" }
+    ]
+}

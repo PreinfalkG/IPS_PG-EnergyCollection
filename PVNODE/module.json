@@ -1,0 +1,16 @@
+{
+    "id": "{28C94352-220E-4B67-8836-B350933AD11A}",
+    "name": "PVNODE Forecast",
+    "type": 3,
+    "vendor": "pvnode",
+    "aliases": [
+        "PV Prognose",
+        "PV Forecast",
+        "pvnode"
+    ],
+    "url": "https://pvnode.com/docs/en/v2/introduction",
+    "parentRequirements": [],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "PVNODE"
+}
