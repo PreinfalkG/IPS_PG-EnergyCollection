@@ -15,11 +15,6 @@
             "caption": "Site-ID"
         },
         {
-            "type": "CheckBox",
-            "name": "IncludeWeather",
-            "caption": "Wetterdaten abrufen (Temperatur, Wettercode) - fällt bei fehlender Plan-Berechtigung automatisch auf reine Leistungsdaten zurück"
-        },
-        {
             "type": "NumberSpinner",
             "name": "ForecastDays",
             "caption": "Prognosehorizont in Tagen (0 = automatisch Planmaximum verwenden - empfohlen)",
@@ -28,11 +23,56 @@
         },
         {
             "type": "NumberSpinner",
+            "name": "PastDays",
+            "caption": "Vergangene Tage, die bis zum heutigen Tag einbezogen werden sollen (0 = default)",
+            "minimum": 0,
+            "maximum": 30
+        },     
+        {
+            "type": "CheckBox",
+            "name": "IncludeDefault",
+            "caption": "Defaults abrufen (PV Power) - fällt bei fehlender Plan-Berechtigung automatisch auf reine Leistungsdaten zurück"
+        },        
+        {
+            "type": "CheckBox",
+            "name": "IncludeWeather",
+            "caption": "Wetterdaten abrufen (Temperatur, Wettercode)"
+        },
+        {
+            "type": "CheckBox",
+            "name": "IncludeIrradiance",
+            "caption": "Irradiance abrufen (Bestrahlungsstärke)"
+        },  
+        {
+            "type": "CheckBox",
+            "name": "IncludeClearsky",
+            "caption": "Clearsky abrufen (Klarer Himmel)"
+        }, 
+        {
+            "type": "CheckBox",
+            "name": "IncludeStrings",
+            "caption": "String Details abrufen"
+        },     
+        {
+            "type": "CheckBox",
+            "name": "IncludeVariability",
+            "caption": "Variability abrufen (Variabilität)"
+        },                                           
+        {
+            "type": "NumberSpinner",
             "name": "UpdateInterval",
             "caption": "Abfrageintervall (Minuten)",
             "minimum": 0,
             "maximum": 1440
         },
+        {
+            "type": "Label",
+            "caption": "bei fehlender Plan-Berechtigung können Daten fehlen"
+        }, 
+        {
+            "type": "Label",
+            "caption": "Irradiance :: GHI = Globale Horizontalstrahlung | DHI = Diffuse Horizontalstrahlung) | BNI / DNI = Direktstrahlung"
+        },                 
         {
             "type": "Label",
             "caption": "Free-Plan: 250 Cache-Anfragen/Monat -> Intervall ≥ 180 Min empfohlen (≈240/Monat). Light/Plus: 3.000/Monat -> ab 15 Min möglich."
@@ -43,7 +83,12 @@
             "caption": "Timeout (Sekunden)",
             "minimum": 5,
             "maximum": 60
-        }
+        },
+        {
+            "type": "CheckBox",
+            "name": "EnableDebug",
+            "caption": "Enable Debug"
+        }          
     ],
     "actions": [
         {

@@ -31,6 +31,8 @@ class PVNODEForecast extends IPSModule
     private const STATUS_INACTIVE = 104;
     private const STATUS_ERROR = 201;
 
+    private $enableDebug = false;
+
     // WMO-Wettercodes gemäß https://pvnode.com/docs/en/v2/guides/weather-codes
     private const WEATHER_CODES = [
         0  => 'Klarer Himmel',
@@ -63,6 +65,12 @@ class PVNODEForecast extends IPSModule
         99 => 'Gewitter mit starkem Hagel',
     ];
 
+    public function __construct($InstanceID) {
+    	parent::__construct($InstanceID);		// Diese Zeile nicht löschen
+
+        $this->enableDebug = @$this->ReadPropertyBoolean("EnableDebug");
+    }
+
     public function Create()
     {
         parent::Create();
@@ -70,9 +78,16 @@ class PVNODEForecast extends IPSModule
         $this->RegisterPropertyString('APIKey', '');
         $this->RegisterPropertyString('SiteID', '');
         $this->RegisterPropertyInteger('ForecastDays', 0); // 0 = Planmaximum (empfohlen, funktioniert auf jedem Plan)
+        $this->RegisterPropertyInteger('PastDays', 0); 
+        $this->RegisterPropertyBoolean('IncludeDefault', true);
         $this->RegisterPropertyBoolean('IncludeWeather', true);
+        $this->RegisterPropertyBoolean('IncludeIrradiance', false);
+        $this->RegisterPropertyBoolean('IncludeClearsky', false);
+        $this->RegisterPropertyBoolean('IncludeStrings', false);
+        $this->RegisterPropertyBoolean('IncludeVariability', false);
         $this->RegisterPropertyInteger('UpdateInterval', 180); // Minuten - siehe Hinweis im Formular zum Free-Plan-Limit
         $this->RegisterPropertyInteger('Timeout', 15);
+        $this->RegisterPropertyBoolean('EnableDebug', false);
 
         $this->RegisterTimer('UpdateTimer', 0, 'PVNODE_UpdateForecast($_IPS[\'TARGET\']);');
     }
@@ -127,12 +142,19 @@ class PVNODEForecast extends IPSModule
 
         $timeout = $this->ReadPropertyInteger('Timeout');
         $forecastDays = $this->ReadPropertyInteger('ForecastDays');
+        $pastDays = $this->ReadPropertyInteger('PastDays');
+        $includeDefault = $this->ReadPropertyBoolean('IncludeDefault');
         $includeWeather = $this->ReadPropertyBoolean('IncludeWeather');
+        $includeIrradiance = $this->ReadPropertyBoolean('IncludeIrradiance');
+        $includeClearsky = $this->ReadPropertyBoolean('IncludeClearsky');
+        $includeStrings = $this->ReadPropertyBoolean('IncludeStrings');
+        $includeVariability = $this->ReadPropertyBoolean('IncludeVariability');
 
         try {
-            $url = $this->BuildUrl($siteId, $forecastDays, $includeWeather);
-            $result = $this->PerformRequest($url, $apiKey, $timeout);
+           $url = $this->BuildUrl($siteId, $forecastDays, $pastDays, $includeDefault, $includeWeather, $includeIrradiance, $includeClearsky, $includeStrings, $includeVariability, "local");
+           $result = $this->PerformRequest($url, $apiKey, $timeout);
 
+            /*
             // Free/Light-Plan enthält evtl. keine Wetterdaten -> automatisch ohne erneut versuchen,
             // statt das ganze Update fehlschlagen zu lassen.
             if ($result['httpCode'] === 403 && $includeWeather) {
@@ -141,9 +163,10 @@ class PVNODEForecast extends IPSModule
                 $url = $this->BuildUrl($siteId, $forecastDays, false);
                 $result = $this->PerformRequest($url, $apiKey, $timeout);
             }
+            */
 
             $this->AssertSuccessful($result);
-            $this->ProcessForecast($result['data'], $includeWeather);
+            $this->ProcessForecast($result['data'], $includeDefault, $includeWeather, $includeIrradiance, $includeClearsky, $includeStrings, $includeVariability);
 
             $this->SetValue('Status', 'OK');
             $this->SetValue('ErrorCount', 0);
@@ -329,15 +352,35 @@ class PVNODEForecast extends IPSModule
         IPS_SetHidden($this->GetIDForIdent('Buffer'), true); // technischer Buffer, im WebFront nicht relevant
     }
 
-    private function BuildUrl(string $siteId, int $forecastDays, bool $includeWeather): string
+    private function BuildUrl(string $siteId, int $forecastDays=0, int $past_days=0, bool $includeDefault=true, bool $includeWeather=false, bool $includeIrradiance=false, bool $includeClearsky=false, bool $includeStrings=false, bool $includeVariability=false, string $timezone="local"): string
     {
         $params = [];
         if ($forecastDays > 0) {
             $params[] = 'forecast_days=' . $forecastDays;
         } // 0 = Parameter weglassen -> Server liefert automatisch das Planmaximum
+        if ($past_days > 0) {
+            $params[] = 'past_days=' . $past_days;
+        }
+        if ($includeDefault) {
+            $params[] = 'include=default';
+        }
         if ($includeWeather) {
             $params[] = 'include=weather';
         }
+        if ($includeIrradiance) {
+            $params[] = 'include=irradiance';
+        }     
+        if ($includeClearsky) {
+            $params[] = 'include=clearsky';
+        }             
+        if ($includeStrings) {
+            $params[] = 'include=strings';
+        } 
+        if ($includeVariability) {
+            $params[] = 'include=variability';
+        }     
+        $params[] = 'timezone=' . $timezone;
+
         $query = count($params) > 0 ? '?' . implode('&', $params) : '';
         return self::API_BASE_URL . rawurlencode($siteId) . $query;
     }
@@ -350,6 +393,7 @@ class PVNODEForecast extends IPSModule
      */
     private function PerformRequest(string $url, string $apiKey, int $timeoutSec): array
     {
+        if($this->enableDebug) { $this->SendDebug(__CLASS__, $url, 0); }
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
@@ -387,6 +431,10 @@ class PVNODEForecast extends IPSModule
             }
         }
 
+        if(false) {
+            $this->SendDebug(__CLASS__, (string)$body, 0);
+            //$this->SendDebug(__CLASS__, (string)$data, 0);
+        }
         return ['httpCode' => $httpCode, 'data' => $data, 'body' => (string)$body];
     }
 
@@ -409,7 +457,7 @@ class PVNODEForecast extends IPSModule
         throw new RuntimeException('HTTP ' . $result['httpCode'] . ' - ' . $hint . ' Antwort: ' . substr($result['body'], 0, 300));
     }
 
-    private function ProcessForecast(array $data, bool $includeWeather): void
+    private function ProcessForecast(array $data, bool $includeDefault, bool $includeWeather, bool $includeIrradiance, bool $includeClearsky, bool $includeStrings, bool $includeVariability): void
     {
         $tz  = new DateTimeZone($data['timezone']);
         $now = new DateTime('now', $tz);
@@ -429,7 +477,9 @@ class PVNODEForecast extends IPSModule
         $series         = [];
 
         foreach ($data['values'] as $row) {
+
             if (!isset($row['timestamp'], $row['pv_power'])) {
+                //if($this->enableDebug) { $this->SendDebug(__CLASS__, print_r($row, true), 0); }
                 continue; // defensiv: unvollständige Zeile überspringen
             }
             $slotDt = DateTime::createFromFormat('Y-m-d\TH:i:s', $row['timestamp'], $tz);
@@ -439,6 +489,8 @@ class PVNODEForecast extends IPSModule
             $slotTs = $slotDt->getTimestamp();
             $power  = (float)$row['pv_power'];
             $energyKwh = $power * 0.25 / 1000.0;
+
+            //if($this->enableDebug) { $this->SendDebug(__CLASS__, sprintf("%s :: %s | %s", $slotTs, $power, $energyKwh), 0); }
 
             if ($slotTs <= $nowTs) {
                 $currentPower = $power;
@@ -456,6 +508,27 @@ class PVNODEForecast extends IPSModule
                         $point['t'] = (float)$row['temp'];
                     }
                 }
+
+                if ($includeIrradiance) {
+                    $point['ghi'] = isset($row['ghi']) ? (float)$row['ghi'] : null;
+                    $point['dhi'] = isset($row['dhi']) ? (float)$row['dhi'] : null;
+                    $point['bni'] = isset($row['bni']) ? (float)$row['bni'] : null;
+                }
+
+                if ($includeClearsky) {
+                    $point['pv_power_clearsky'] = isset($row['pv_power_clearsky']) ? (float)$row['pv_power_clearsky'] : null;
+                }    
+                
+                if ($includeStrings) {
+                    $point['string_id'] = isset($row['string_id']) ? (float)$row['string_id'] : null;
+                }                  
+
+                if ($includeVariability) {
+                    $point['pv_power_min'] = isset($row['pv_power_min']) ? (float)$row['pv_power_min'] : null;
+                    $point['pv_power_max'] = isset($row['pv_power_max']) ? (float)$row['pv_power_max'] : null;
+                } 
+
+                if($this->enableDebug) { $this->SendDebug(__CLASS__, sprintf("Point :: %s ", print_r($point, true)), 0); }
                 $series[] = $point;
 
                 if ($slotTs < $in1h) {
@@ -467,6 +540,10 @@ class PVNODEForecast extends IPSModule
                 if ($slotDt->format('Y-m-d') === $today) {
                     $remainingToday += $energyKwh;
                 }
+                if($this->enableDebug) { $this->SendDebug(__CLASS__, sprintf("1h: %s  | 4h: %s | remainingToday: %s", $next1hKwh, $next4hKwh, $remainingToday), 0); }
+                //if($this->enableDebug) { $this->SendDebug(__CLASS__, sprintf("%s >= %s", $slotTs, $nowTs), 0); }
+            } else {
+                if($this->enableDebug) { $this->SendDebug(__CLASS__, sprintf("%s < %s", $slotTs, $nowTs), 0); }
             }
         }
 
@@ -479,6 +556,7 @@ class PVNODEForecast extends IPSModule
             $currentPower = 0.0;
         }
 
+        // - - - - DAILY Forecase - - - -
         $todayTotalKwh = null;
         $tomorrowTotalKwh = null;
         $todayWeatherCode = null;
@@ -529,7 +607,7 @@ class PVNODEForecast extends IPSModule
      * Lädt und dekodiert die im Buffer gespeicherte Zeitreihe.
      * Gibt null zurück, wenn noch kein erfolgreicher Abruf stattgefunden hat.
      */
-    private function LoadSeries(): ?array
+    public function LoadSeries(): ?array
     {
         $raw = $this->GetValue('Buffer');
         if ($raw === '') {
