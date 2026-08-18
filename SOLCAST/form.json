@@ -1,0 +1,131 @@
+{
+    "elements": [
+        {
+            "type": "ExpansionPanel",
+            "caption": "API Zugang",
+            "items": [
+                {
+                    "type": "PasswordTextBox",
+                    "name": "APIKey",
+                    "caption": "Solcast API Key"
+                },
+                {
+                    "type": "Label",
+                    "caption": "API Key aus dem Solcast Toolkit (https://toolkit.solcast.com.au/, Account -> API Key)."
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "MaxRequestsPerDay",
+                    "caption": "Maximale API Requests pro Tag (Hobbyist Free = 10)",
+                    "minimum": 1,
+                    "maximum": 1000
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "PV-Fläche 1",
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "Site1Active",
+                    "caption": "Aktiv"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "Site1Name",
+                    "caption": "Bezeichnung (z.B. ADW20 - Hausdach)"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "Site1ResourceID",
+                    "caption": "Resource Id (aus Solcast Toolkit)"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site1ACCapacity",
+                    "caption": "AC Kapazität (kW) - nur Info",
+                    "digits": 2
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "PV-Fläche 2",
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "Site2Active",
+                    "caption": "Aktiv"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "Site2Name",
+                    "caption": "Bezeichnung (z.B. PV-Zaun)"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "Site2ResourceID",
+                    "caption": "Resource Id (aus Solcast Toolkit)"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site2ACCapacity",
+                    "caption": "AC Kapazität (kW) - nur Info",
+                    "digits": 2
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "Abruf-Einstellungen",
+            "items": [
+                {
+                    "type": "Select",
+                    "name": "UpdateIntervalHours",
+                    "caption": "Abrufintervall",
+                    "options": [
+                        { "caption": "Alle 3 Stunden (8 Zyklen/Tag)", "value": 3 },
+                        { "caption": "Alle 4 Stunden (6 Zyklen/Tag)", "value": 4 },
+                        { "caption": "Alle 6 Stunden (4 Zyklen/Tag)", "value": 6 },
+                        { "caption": "Alle 8 Stunden (3 Zyklen/Tag)", "value": 8 },
+                        { "caption": "Alle 12 Stunden (2 Zyklen/Tag)", "value": 12 },
+                        { "caption": "Alle 24 Stunden (1 Zyklus/Tag)", "value": 24 }
+                    ]
+                },
+                {
+                    "type": "Select",
+                    "name": "ForecastVariant",
+                    "caption": "Primärer Wert für Statusvariablen",
+                    "options": [
+                        { "caption": "pv_estimate (Median / P50)", "value": 0 },
+                        { "caption": "pv_estimate10 (Pessimistisch / P10)", "value": 1 },
+                        { "caption": "pv_estimate90 (Optimistisch / P90)", "value": 2 }
+                    ]
+                },
+                {
+                    "type": "Label",
+                    "caption": "Hinweis: Jeder Abrufzyklus verbraucht 2 API Requests (eine je PV-Fläche). Bei 10 Requests/Tag (Free Hobbyist) sind max. 5 Zyklen/Tag möglich."
+                }
+            ]
+        },
+        {
+            "type": "Label",
+            "caption": "Letzter Abruf, nächster Abruf und Requests heute sind als Statusvariablen der Instanz sichtbar (unterhalb des Formulars)."
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "Prognose jetzt abrufen",
+            "onClick": "SOLCAST_RequestForecast($id);"
+        }
+    ],
+    "status": [
+        { "code": 101, "icon": "active", "caption": "Modul wird erstellt" },
+        { "code": 102, "icon": "active", "caption": "SOLCAST Forecast aktiv" },
+        { "code": 201, "icon": "inactive", "caption": "Bitte API Key und mindestens eine PV-Fläche konfigurieren" },
+        { "code": 202, "icon": "error", "caption": "Fehler beim Abruf der Solcast API - siehe Meldungen" },
+        { "code": 203, "icon": "error", "caption": "Tageslimit an API Requests erreicht" }
+    ]
+}

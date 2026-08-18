@@ -1,0 +1,16 @@
+{
+    "id": "{cb3561a9-9e78-4e03-a63b-5847002e758e}",
+    "name": "SOLCAST Forecast",
+    "webfront": false,
+    "vendor": "Falke",
+    "url": "https://toolkit.solcast.com.au/",
+    "type": 3,
+    "aliases": [],
+    "implemented": [],
+    "parentRequirements": [],
+    "childRequirements": [],
+    "compatibility": {
+        "minimumIPSVersion": "6.0"
+    },
+    "prefix": "SOLCAST"
+}
