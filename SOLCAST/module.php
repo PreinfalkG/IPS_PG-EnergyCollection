@@ -81,10 +81,10 @@ class SOLCASTForecast extends IPSModule
 
         // Rohdaten / Zeitreihen als JSON-Puffer für eigene Visualisierungen (z.B. HTML-Box, Skripte)
         $this->RegisterVariableString('ForecastJSON', 'Prognose Summe (JSON)', '', 50);
-        $this->RegisterVariableString('ForecastJsonite1', 'Prognose ' . $site1Name . ' (JSON)', '', 60);
+        $this->RegisterVariableString('ForecastJsonSite1', 'Prognose ' . $site1Name . ' (JSON)', '', 60);
         $this->RegisterVariableString('ForecastJsonSite2', 'Prognose ' . $site2Name . ' (JSON)', '', 70);
         IPS_SetHidden($this->GetIDForIdent('ForecastJSON'), true);
-        IPS_SetHidden($this->GetIDForIdent('ForecastJsonite1'), true);
+        IPS_SetHidden($this->GetIDForIdent('ForecastJsonSite1'), true);
         IPS_SetHidden($this->GetIDForIdent('ForecastJsonSite2'), true);
 
         // Statusinfos zum Abruf
@@ -157,7 +157,7 @@ class SOLCASTForecast extends IPSModule
         $sumSeries = $this->MergeAndSum($site1Series, $site2Series);
 
         // JSON-Puffer schreiben (alle drei Varianten P10/P50/P90 enthalten -> für eigene Auswertung/Charts)
-        $this->SetValue('ForecastJsonite1', json_encode(array_values($site1Series)));
+        $this->SetValue('ForecastJsonSite1', json_encode(array_values($site1Series)));
         $this->SetValue('ForecastJsonSite2', json_encode(array_values($site2Series)));
         $this->SetValue('ForecastJSON', json_encode(array_values($sumSeries)));
 
@@ -214,6 +214,18 @@ class SOLCASTForecast extends IPSModule
         $data = json_decode((string) $json, true);
         return is_array($data) ? $data : [];
     }
+    public function GetForecastArraySite1(): array
+    {
+        $json = $this->GetValue('ForecastJsonSite1');
+        $data = json_decode((string) $json, true);
+        return is_array($data) ? $data : [];
+    }  
+    public function GetForecastArraySite2(): array
+    {
+        $json = $this->GetValue('ForecastJsonSite2');
+        $data = json_decode((string) $json, true);
+        return is_array($data) ? $data : [];
+    }      
 
     // -----------------------------------------------------------------
     // Interne Hilfsfunktionen
