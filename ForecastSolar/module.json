@@ -1,0 +1,16 @@
+{
+    "id": "{e43d6417-6d36-44a8-a46c-1bc67212cd32}",
+    "name": "ForecastSolar Forecast",
+    "webfront": false,
+    "vendor": "Falke",
+    "url": "https://doc.forecast.solar/doku.php?id=api:estimate",
+    "type": 3,
+    "aliases": [],
+    "implemented": [],
+    "parentRequirements": [],
+    "childRequirements": [],
+    "compatibility": {
+        "minimumIPSVersion": "6.0"
+    },
+    "prefix": "FSOLAR"
+}
