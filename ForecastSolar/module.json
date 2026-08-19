@@ -1,8 +1,8 @@
 {
-    "id": "{e43d6417-6d36-44a8-a46c-1bc67212cd32}",
-    "name": "ForecastSolar Forecast",
+    "id": "{E43D6417-6D36-44A8-A46C-1BC67212CD32}",
+    "name": "ForecastSolar",
     "webfront": false,
-    "vendor": "Falke",
+    "vendor": "PreinfalkG",
     "url": "https://doc.forecast.solar/doku.php?id=api:estimate",
     "type": 3,
     "aliases": [],

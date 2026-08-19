@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * SOLCASTForecast
+ * SOLCAST
  *
  * IP-Symcon Modul für die Solcast Rooftop Sites Forecast API
  * (https://toolkit.solcast.com.au/, Free "Hobbyist" Plan).
@@ -16,6 +16,14 @@ declare(strict_types=1);
 class SOLCASTForecast extends IPSModule
 {
     private const API_BASE = 'https://api.solcast.com.au/rooftop_sites/';
+
+    private $enableDebug = false;
+
+    public function __construct($InstanceID) {
+    	parent::__construct($InstanceID);		// Diese Zeile nicht löschen
+
+        $this->enableDebug = @$this->ReadPropertyBoolean("EnableDebug");
+    }
 
     public function Create()
     {
@@ -44,6 +52,8 @@ class SOLCASTForecast extends IPSModule
         // --- interner Zustand (nicht im Formular sichtbar) ---
         $this->RegisterAttributeInteger('RequestsToday', 0);
         $this->RegisterAttributeString('RequestsResetDay', '');
+
+        $this->RegisterPropertyBoolean('EnableDebug', false);
 
         $this->RegisterTimer('UpdateTimer', 0, 'SOLCAST_RequestForecast($_IPS[\'TARGET\']);');
     }
@@ -92,9 +102,18 @@ class SOLCASTForecast extends IPSModule
         $this->RegisterVariableInteger('NextUpdate', 'Nächster geplanter Abruf', '~UnixTimestamp', 81);
         $this->RegisterVariableInteger('RequestsTodayInfo', 'API Requests heute', '', 82);
 
+        $this->RegisterVariableString('ForecastChart', 'SOLCAST Prognose Chart', '~HTMLBox', 100);
+
         // Timer entsprechend Intervall setzen
         $intervalHours = $this->ReadPropertyInteger('UpdateIntervalHours');
-        $this->SetTimerInterval('UpdateTimer', $intervalHours * 3600 * 1000);
+        if($intervalHours > 0) {
+            $this->SetTimerInterval('UpdateTimer', $intervalHours * 3600 * 1000);
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("UpdateTimer set to %d Hours", $intervalHours), 0); }
+        } else {
+            $this->SetTimerInterval('UpdateTimer', 0);
+            $this->SetValue('NextUpdate', 0);
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, "UpdateTimer DEAKTIVIERT", 0); }
+        }
 
         // Instanzstatus prüfen
         $apiKey = $this->ReadPropertyString('APIKey');
@@ -118,13 +137,17 @@ class SOLCASTForecast extends IPSModule
         $apiKey = $this->ReadPropertyString('APIKey');
         if ($apiKey === '') {
             $this->SetStatus(201);
-            $this->LogMessage('SOLCASTForecast: Kein API Key konfiguriert.', KL_WARNING);
+            $logTxt = "SOLCAST: Kein API Key konfiguriert";
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }
+            $this->LogMessage($logTxt, KL_WARNING);
             return false;
         }
 
         if (!$this->CheckAndConsumeRequestBudget()) {
             $this->SetStatus(203);
-            $this->LogMessage('SOLCASTForecast: Tageslimit an API Requests erreicht, Abruf übersprungen.', KL_WARNING);
+            $logTxt = "SOLCAST: Tageslimit an API Requests erreicht, Abruf übersprungen";
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }            
+            $this->LogMessage($logTxt, KL_WARNING);
             return false;
         }
 
@@ -133,7 +156,9 @@ class SOLCASTForecast extends IPSModule
 
         if (!$site1Active && !$site2Active) {
             $this->SetStatus(201);
-            $this->LogMessage('SOLCASTForecast: Keine aktive PV-Fläche konfiguriert.', KL_WARNING);
+            $logTxt = "SOLCAST: Keine aktive PV-Fläche konfiguriert";
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }                  
+            $this->LogMessage($logTxt, KL_WARNING);
             return false;
         }
 
@@ -149,9 +174,14 @@ class SOLCASTForecast extends IPSModule
         }
 
         if ($errorOccurred && empty($site1Series) && empty($site2Series)) {
+            $logTxt = sprintf("ErrorOccurred or SiteSeries empty [Site1 Cnt: %d | Site2 Cnt: %d]", count($site1Series), count($site2Series));
+            $this->LogMessage($logTxt, KL_ERROR);
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }
             $this->SetStatus(202);
             return false;
         }
+
+        if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("Site1Series Cnt: %d | Site1Series Cnt: %d", count(site1Series), count(site2Series)), 0); }
 
         // Beide Zeitreihen je Zeitstempel (period_end, Unix UTC) zur Summenreihe zusammenführen
         $sumSeries = $this->MergeAndSum($site1Series, $site2Series);
@@ -190,6 +220,18 @@ class SOLCASTForecast extends IPSModule
         $this->SetValue('TomorrowForecastEnergySite1', $this->CalculateEnergyInRange($site1Series, $variantKey, $todayEnd, $tomorrowEnd));
         $this->SetValue('TomorrowForecastEnergySite2', $this->CalculateEnergyInRange($site2Series, $variantKey, $todayEnd, $tomorrowEnd));
 
+        // Chart (heute 00:00 bis übermorgen 00:00) als HTMLBox aktualisieren
+        $this->SetValue('ForecastChart', $this->BuildForecastChartHtml(
+            $site1Series,
+            $site2Series,
+            $sumSeries,
+            $variantKey,
+            $todayStart,
+            $tomorrowEnd,
+            $site1Name,
+            $site2Name
+        ));
+
         $this->SetValue('LastUpdate', $now);
         $intervalHours = $this->ReadPropertyInteger('UpdateIntervalHours');
         $this->SetValue('NextUpdate', $now + $intervalHours * 3600);
@@ -227,6 +269,130 @@ class SOLCASTForecast extends IPSModule
         return is_array($data) ? $data : [];
     }      
 
+
+    /**
+     * Baut den Inhalt der HTMLBox-Variable ForecastChart: ein Chart.js Liniendiagramm
+     * mit Fläche1, Fläche2 und Summe im Bereich [rangeStart, rangeEnd).
+     */
+    public function BuildForecastChartHtml(array $site1Series, array $site2Series, array $sumSeries, string $variantKey, int $rangeStart, int $rangeEnd, string $site1Name, string $site2Name): string
+    {
+        $labels = [];
+        $data1 = [];
+        $data2 = [];
+        $dataSum = [];
+        $dataSum10 = [];
+        $dataSum90 = [];
+
+        // Zeitachse aus der Summenreihe ableiten (enthält Vereinigung aller Zeitstempel)
+        foreach ($sumSeries as $entry) {
+            $ts = $entry['period_end'];
+            if ($ts < $rangeStart || $ts >= $rangeEnd) {
+                continue;
+            }
+            $labels[] = date('d.m. H:i', $ts);
+            $data1[] = round($site1Series[$ts][$variantKey] ?? 0, 3);
+            $data2[] = round($site2Series[$ts][$variantKey] ?? 0, 3);
+            $dataSum[] = round($entry[$variantKey] ?? 0, 3);
+            // P10/P90 immer von der Summenreihe, unabhängig von der gewählten Primärvariante
+            $dataSum10[] = round($entry['pv_estimate10'] ?? 0, 3);
+            $dataSum90[] = round($entry['pv_estimate90'] ?? 0, 3);
+        }
+
+        $chartId = 'solcastChart' . $this->InstanceID;
+        $payload = json_encode([
+            'labels'    => $labels,
+            'site1'     => $data1,
+            'site2'     => $data2,
+            'sum'       => $dataSum,
+            'sum10'     => $dataSum10,
+            'sum90'     => $dataSum90,
+            'site1Name' => $site1Name,
+            'site2Name' => $site2Name
+        ]);
+
+        return <<<HTML
+<div style="width:100%;height:300px;">
+    <canvas id="{$chartId}"></canvas>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function() {
+    var d = {$payload};
+    var ctx = document.getElementById('{$chartId}').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: d.labels,
+            datasets: [
+                {
+                    // obere Bandgrenze (P90) - unsichtbar, dient nur als Füllreferenz für die nächste Datenreihe
+                    label: 'P90',
+                    data: d.sum90,
+                    borderWidth: 0,
+                    pointRadius: 0,
+                    fill: false
+                },
+                {
+                    // untere Bandgrenze (P10) - füllt die Fläche bis zur vorherigen Datenreihe (P90) -> Unsicherheitsband
+                    label: 'Unsicherheitsband (P10-P90)',
+                    data: d.sum10,
+                    borderWidth: 0,
+                    pointRadius: 0,
+                    backgroundColor: 'rgba(46,204,113,0.18)',
+                    fill: '-1'
+                },
+                {
+                    label: d.site1Name,
+                    data: d.site1,
+                    borderColor: '#f2a900',
+                    backgroundColor: 'rgba(242,169,0,0.15)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0
+                },
+                {
+                    label: d.site2Name,
+                    data: d.site2,
+                    borderColor: '#2e86de',
+                    backgroundColor: 'rgba(46,134,222,0.15)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0
+                },
+                {
+                    label: 'Summe',
+                    data: d.sum,
+                    borderColor: '#2ecc71',
+                    backgroundColor: 'rgba(46,204,113,0.05)',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    labels: {
+                        filter: function(item) { return item.text !== 'P90'; }
+                    }
+                }
+            },
+            scales: {
+                y: { title: { display: true, text: 'kW' } }
+            }
+        }
+    });
+})();
+</script>
+HTML;
+    }
+
+
     // -----------------------------------------------------------------
     // Interne Hilfsfunktionen
     // -----------------------------------------------------------------
@@ -234,6 +400,8 @@ class SOLCASTForecast extends IPSModule
     private function FetchSiteForecast(string $resourceId, string $apiKey, bool &$errorOccurred): array
     {
         $url = self::API_BASE . rawurlencode($resourceId) . '/forecasts?format=json';
+
+        if($this->enableDebug) { $this->SendDebug(__METHOD__, $url, 0); }
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -250,20 +418,26 @@ class SOLCASTForecast extends IPSModule
         curl_close($ch);
 
         if ($response === false || $curlError !== '') {
-            $this->LogMessage('SOLCASTForecast: cURL Fehler für Resource ' . $resourceId . ': ' . $curlError, KL_ERROR);
+            $logTxt = 'SOLCAST: cURL Fehler für Resource ' . $resourceId . ': ' . $curlError;
+            $this->LogMessage($logTxt, KL_ERROR);
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }
             $errorOccurred = true;
             return [];
         }
 
         if ($httpCode !== 200) {
-            $this->LogMessage('SOLCASTForecast: HTTP ' . $httpCode . ' für Resource ' . $resourceId . ': ' . substr((string) $response, 0, 300), KL_ERROR);
+            $logTxt = 'SOLCAST: HTTP ' . $httpCode . ' für Resource ' . $resourceId . ': ' . substr((string) $response, 0, 300);
+            $this->LogMessage($logTxt, KL_ERROR);
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }
             $errorOccurred = true;
             return [];
         }
 
         $data = json_decode((string) $response, true);
         if (!is_array($data) || !isset($data['forecasts']) || !is_array($data['forecasts'])) {
-            $this->LogMessage('SOLCASTForecast: Unerwartetes Antwortformat für Resource ' . $resourceId, KL_ERROR);
+            $logTxt = 'SOLCAST: Unerwartetes Antwortformat für Resource ' . $resourceId;
+            $this->LogMessage($logTxt, KL_ERROR);
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }
             $errorOccurred = true;
             return [];
         }

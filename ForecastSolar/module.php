@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * ForecastSolarForecast
+ * ForecastSolar
  *
  * IP-Symcon Modul für die Forecast.Solar API (https://doc.forecast.solar/doku.php?id=api:estimate),
  * Public Plan (ohne API Key, Rate Limit 12 Requests/Stunde je IP).
@@ -13,10 +13,12 @@ declare(strict_types=1);
  *
  * Modul-Präfix: FSOLAR
  */
-class ForecastSolarForecast extends IPSModule
+class ForecastSolar extends IPSModule
 {
     private const API_BASE = 'https://api.forecast.solar/';
     private const SITE_COUNT = 4;
+
+    private $enableDebug = false;
 
     private const SITE_DEFAULTS = [
         1 => ['Name' => 'PV Hausdach',     'Latitude' => 48.325634, 'Longitude' => 14.426263, 'Declination' => 7,  'Azimuth' => 0,   'kWp' => 13.12],
@@ -24,6 +26,12 @@ class ForecastSolarForecast extends IPSModule
         3 => ['Name' => 'PV Garage Ost',   'Latitude' => 48.325634, 'Longitude' => 14.426263, 'Declination' => 10, 'Azimuth' => -90, 'kWp' => 1.3],
         4 => ['Name' => 'PV Garage West',  'Latitude' => 48.325634, 'Longitude' => 14.426263, 'Declination' => 10, 'Azimuth' => 90,  'kWp' => 1.3]
     ];
+
+    public function __construct($InstanceID) {
+    	parent::__construct($InstanceID);		// Diese Zeile nicht löschen
+
+        $this->enableDebug = @$this->ReadPropertyBoolean("EnableDebug");
+    }
 
     public function Create()
     {
@@ -47,6 +55,8 @@ class ForecastSolarForecast extends IPSModule
         $this->RegisterAttributeInteger('RequestsThisHour', 0);
         $this->RegisterAttributeString('RequestsResetHour', '');
 
+        $this->RegisterPropertyBoolean('EnableDebug', false);
+
         $this->RegisterTimer('UpdateTimer', 0, 'FSOLAR_RequestForecast($_IPS[\'TARGET\']);');
     }
 
@@ -62,7 +72,7 @@ class ForecastSolarForecast extends IPSModule
         $this->RegisterVariableFloat('TodayForecastEnergy', 'Prognose Energie heute', 'FSOLAR.Energy', 20);
         $this->RegisterVariableFloat('TodayRemainingEnergy', 'Prognose Restenergie heute', 'FSOLAR.Energy', 30);
         $this->RegisterVariableFloat('TomorrowForecastEnergy', 'Prognose Energie morgen', 'FSOLAR.Energy', 40);
-        $this->RegisterVariableString('ForecastChart', 'Prognose Chart', '~HTMLBox', 45);
+        $this->RegisterVariableString('ForecastChart', 'Forecast.Solar Prognose Chart', '~HTMLBox', 45);
         $this->RegisterVariableString('ForecastJSON', 'Prognose Summe (JSON)', '', 50);
         IPS_SetHidden($this->GetIDForIdent('ForecastJSON'), true);
 
@@ -84,7 +94,14 @@ class ForecastSolarForecast extends IPSModule
         $this->RegisterVariableInteger('RequestsThisHourInfo', 'API Requests diese Stunde', '', 82);
 
         $intervalMinutes = $this->ReadPropertyInteger('UpdateIntervalMinutes');
-        $this->SetTimerInterval('UpdateTimer', $intervalMinutes * 60 * 1000);
+        if($intervalMinutes > 0) {
+            $this->SetTimerInterval('UpdateTimer', $intervalMinutes * 60 * 1000);
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("UpdateTimer set to %d Min", $intervalMinutes), 0); }
+        } else {
+            $this->SetTimerInterval('UpdateTimer', 0);
+            $this->SetValue('NextUpdate', 0);
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, "UpdateTimer DEAKTIVIERT", 0); }
+        }
 
         $anyActive = false;
         for ($i = 1; $i <= self::SITE_COUNT; $i++) {
@@ -112,14 +129,20 @@ class ForecastSolarForecast extends IPSModule
 
         if (empty($activeSites)) {
             $this->SetStatus(201);
-            $this->LogMessage('ForecastSolarForecast: Keine aktive PV-Fläche konfiguriert.', KL_WARNING);
+            $logTxt = "Forecast.Solar: Keine aktive PV-Fläche konfiguriert";
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }                
+            $this->LogMessage($logTxt, KL_WARNING);
             return false;
         }
 
         if (!$this->CheckAndConsumeRequestBudget(count($activeSites))) {
             $this->SetStatus(203);
-            $this->LogMessage('ForecastSolarForecast: Stundenlimit an API Requests erreicht, Abruf übersprungen.', KL_WARNING);
-            return false;
+            $logTxt = "Forecast.Solar: Stundenlimit an API Requests erreicht, Abruf übersprungen";
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }                   
+            $this->LogMessage($logTxt, KL_WARNING);
+            if(!$this->enableDebug) {
+                return false;
+            }
         }
 
         $siteSeries = [];  // $i => [ts => ['period_end'=>ts,'power'=>kW,'energy'=>kWh]]
@@ -217,6 +240,8 @@ class ForecastSolarForecast extends IPSModule
             . $az . '/'
             . $this->FormatNumber($kwp, 3);
 
+        if($this->enableDebug) { $this->SendDebug(__METHOD__, $url, 0); }
+
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
@@ -231,26 +256,34 @@ class ForecastSolarForecast extends IPSModule
         $empty = ['series' => [], 'daily' => []];
 
         if ($response === false || $curlError !== '') {
-            $this->LogMessage('ForecastSolarForecast: cURL Fehler für Fläche ' . $siteIndex . ': ' . $curlError, KL_ERROR);
+            $logTxt = 'Forecast.Solar: cURL Fehler für Fläche ' . $siteIndex . ': ' . $curlError;
+            $this->LogMessage($logTxt, KL_ERROR);
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }
             $errorOccurred = true;
             return $empty;
         }
 
         if ($httpCode === 429) {
-            $this->LogMessage('ForecastSolarForecast: Rate Limit (429) für Fläche ' . $siteIndex . ' erreicht - Intervall erhöhen oder Anzahl Flächen reduzieren.', KL_ERROR);
+            $logTxt = 'Forecast.Solar: Rate Limit (429) für Fläche ' . $siteIndex . ' erreicht - Intervall erhöhen oder Anzahl Flächen reduzieren. ' . $response;
+            $this->LogMessage($logTxt, KL_ERROR);
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }            
             $errorOccurred = true;
             return $empty;
         }
 
         if ($httpCode !== 200) {
-            $this->LogMessage('ForecastSolarForecast: HTTP ' . $httpCode . ' für Fläche ' . $siteIndex . ': ' . substr((string) $response, 0, 300), KL_ERROR);
+            $logTxt = 'Forecast.Solar: HTTP ' . $httpCode . ' für Fläche ' . $siteIndex . ': ' . substr((string) $response, 0, 300);
+            $this->LogMessage($logTxt, KL_ERROR);
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }              
             $errorOccurred = true;
             return $empty;
         }
 
         $data = json_decode((string) $response, true);
         if (!is_array($data) || !isset($data['result']['watt_hours_period']) || !is_array($data['result']['watt_hours_period'])) {
-            $this->LogMessage('ForecastSolarForecast: Unerwartetes Antwortformat für Fläche ' . $siteIndex, KL_ERROR);
+            $logTxt = 'Forecast.Solar: Unerwartetes Antwortformat für Fläche ' . $siteIndex;
+            $this->LogMessage($logTxt, KL_ERROR);
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }    
             $errorOccurred = true;
             return $empty;
         }
@@ -278,6 +311,8 @@ class ForecastSolarForecast extends IPSModule
         foreach ($wattHoursDay as $dateKey => $wh) {
             $daily[$dateKey] = round(((float) $wh) / 1000, 3);
         }
+
+        if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("Daily Cnt: %d | Series Cnt: %d", count($daily), count($series)), 0); }
 
         return ['series' => $series, 'daily' => $daily];
     }
@@ -368,13 +403,15 @@ class ForecastSolarForecast extends IPSModule
         $currentHour = date('Y-m-d-H');
         $resetHour = $this->ReadAttributeString('RequestsResetHour');
         $usedThisHour = $this->ReadAttributeInteger('RequestsThisHour');
+        $maxPerHour = $this->ReadPropertyInteger('MaxRequestsPerHour');
+
+        if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("currentHour: %s | resetHour: %s | usedThisHour: %s | maxPerHour: %s", $currentHour, $resetHour, $usedThisHour, $maxPerHour), 0); }
 
         if ($resetHour !== $currentHour) {
             $usedThisHour = 0;
             $this->WriteAttributeString('RequestsResetHour', $currentHour);
         }
 
-        $maxPerHour = $this->ReadPropertyInteger('MaxRequestsPerHour');
         if ($usedThisHour + $requestsNeeded > $maxPerHour) {
             return false;
         }

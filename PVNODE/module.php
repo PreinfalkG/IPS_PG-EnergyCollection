@@ -104,13 +104,13 @@ class PVNODEForecast extends IPSModule
         $this->MaintainVariables();
 
         $interval = $this->ReadPropertyInteger('UpdateInterval');
-        if($interval == 0) {
-            $this->SetTimerInterval('UpdateTimer', 0);
-        } else {
-            if ($interval < 5) {
-                $interval = 5; // Untergrenze gegen versehentliches Overpolling / API-Sperren
-            }
+        if($interval > 0) {
+            if ($interval < 5) { $interval = 5; }
             $this->SetTimerInterval('UpdateTimer', $interval * 60 * 1000);
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("UpdateTimer set to %d Min", $interval), 0); }
+        } else {
+            $this->SetTimerInterval('UpdateTimer', 0);
+            if($this->enableDebug) { $this->SendDebug(__METHOD__, "UpdateTimer DEAKTIVIERT", 0); }
         }
 
         if ($this->ReadPropertyString('APIKey') !== '' && $this->ReadPropertyString('SiteID') !== '') {
@@ -393,7 +393,7 @@ class PVNODEForecast extends IPSModule
      */
     private function PerformRequest(string $url, string $apiKey, int $timeoutSec): array
     {
-        if($this->enableDebug) { $this->SendDebug(__CLASS__, $url, 0); }
+        if($this->enableDebug) { $this->SendDebug(__METHOD__, $url, 0); }
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
@@ -432,8 +432,8 @@ class PVNODEForecast extends IPSModule
         }
 
         if(false) {
-            $this->SendDebug(__CLASS__, (string)$body, 0);
-            //$this->SendDebug(__CLASS__, (string)$data, 0);
+            $this->SendDebug(__METHOD__, (string)$body, 0);
+            //$this->SendDebug(__METHOD__, (string)$data, 0);
         }
         return ['httpCode' => $httpCode, 'data' => $data, 'body' => (string)$body];
     }
@@ -479,7 +479,7 @@ class PVNODEForecast extends IPSModule
         foreach ($data['values'] as $row) {
 
             if (!isset($row['timestamp'], $row['pv_power'])) {
-                //if($this->enableDebug) { $this->SendDebug(__CLASS__, print_r($row, true), 0); }
+                //if($this->enableDebug) { $this->SendDebug(__METHOD__, print_r($row, true), 0); }
                 continue; // defensiv: unvollständige Zeile überspringen
             }
             $slotDt = DateTime::createFromFormat('Y-m-d\TH:i:s', $row['timestamp'], $tz);
@@ -490,7 +490,7 @@ class PVNODEForecast extends IPSModule
             $power  = (float)$row['pv_power'];
             $energyKwh = $power * 0.25 / 1000.0;
 
-            //if($this->enableDebug) { $this->SendDebug(__CLASS__, sprintf("%s :: %s | %s", $slotTs, $power, $energyKwh), 0); }
+            //if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("%s :: %s | %s", $slotTs, $power, $energyKwh), 0); }
 
             if ($slotTs <= $nowTs) {
                 $currentPower = $power;
@@ -528,7 +528,7 @@ class PVNODEForecast extends IPSModule
                     $point['pv_power_max'] = isset($row['pv_power_max']) ? (float)$row['pv_power_max'] : null;
                 } 
 
-                if($this->enableDebug) { $this->SendDebug(__CLASS__, sprintf("Point :: %s ", print_r($point, true)), 0); }
+                if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("Point :: %s ", print_r($point, true)), 0); }
                 $series[] = $point;
 
                 if ($slotTs < $in1h) {
@@ -540,10 +540,10 @@ class PVNODEForecast extends IPSModule
                 if ($slotDt->format('Y-m-d') === $today) {
                     $remainingToday += $energyKwh;
                 }
-                if($this->enableDebug) { $this->SendDebug(__CLASS__, sprintf("1h: %s  | 4h: %s | remainingToday: %s", $next1hKwh, $next4hKwh, $remainingToday), 0); }
-                //if($this->enableDebug) { $this->SendDebug(__CLASS__, sprintf("%s >= %s", $slotTs, $nowTs), 0); }
+                if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("1h: %s  | 4h: %s | remainingToday: %s", $next1hKwh, $next4hKwh, $remainingToday), 0); }
+                //if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("%s >= %s", $slotTs, $nowTs), 0); }
             } else {
-                if($this->enableDebug) { $this->SendDebug(__CLASS__, sprintf("%s < %s", $slotTs, $nowTs), 0); }
+                if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("%s < %s", $slotTs, $nowTs), 0); }
             }
         }
 

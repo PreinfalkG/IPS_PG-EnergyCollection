@@ -25,6 +25,7 @@
                     "name": "UpdateIntervalMinutes",
                     "caption": "Abrufintervall",
                     "options": [
+                        { "caption": "DEAKTIVIERT", "value": 0 },
                         { "caption": "Alle 15 Minuten (4 Zyklen/Stunde)", "value": 15 },
                         { "caption": "Alle 30 Minuten (2 Zyklen/Stunde) - empfohlen bei 4 Flächen", "value": 30 },
                         { "caption": "Alle 60 Minuten (1 Zyklus/Stunde)", "value": 60 }
@@ -88,6 +89,11 @@
                 { "type": "NumberSpinner", "name": "Site4kWp", "caption": "Modulleistung (kWp)", "digits": 2 }
             ]
         },
+        {
+            "type": "CheckBox",
+            "name": "EnableDebug",
+            "caption": "Enable Debug"
+        },             
         {
             "type": "Label",
             "caption": "Letzter Abruf, nächster Abruf und Requests diese Stunde sind als Statusvariablen der Instanz sichtbar (unterhalb des Formulars)."
