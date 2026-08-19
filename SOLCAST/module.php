@@ -69,28 +69,28 @@ class SOLCASTForecast extends IPSModule
         $site2Name = $this->ReadPropertyString('Site2Name');
 
         // aktuelle Leistung
-        $this->RegisterVariableFloat('CurrentPower', 'Aktuelle PV Prognose (Summe)', 'SOLCAST.Power', 10);
+        $this->RegisterVariableFloat('CurrentPower', 'Aktuelle PV Prognose', 'SOLCAST.Power', 10);
         $this->RegisterVariableFloat('CurrentPowerSite1', 'Aktuelle PV Prognose - ' . $site1Name, 'SOLCAST.Power', 11);
         $this->RegisterVariableFloat('CurrentPowerSite2', 'Aktuelle PV Prognose - ' . $site2Name, 'SOLCAST.Power', 12);
 
         // Prognose Restenergie heute (ab jetzt bis 24:00)
-        $this->RegisterVariableFloat('TodayRemainingEnergy', 'Prognose Restenergie heute (Summe)', 'SOLCAST.Energy', 20);
+        $this->RegisterVariableFloat('TodayRemainingEnergy', 'Prognose Restenergie heute', 'SOLCAST.Energy', 20);
         $this->RegisterVariableFloat('TodayRemainingEnergySite1', 'Prognose Restenergie heute - ' . $site1Name, 'SOLCAST.Energy', 21);
         $this->RegisterVariableFloat('TodayRemainingEnergySite2', 'Prognose Restenergie heute - ' . $site2Name, 'SOLCAST.Energy', 22);
 
         // Prognose Energie heute (gesamter Tag, 00:00-24:00)
-        $this->RegisterVariableFloat('TodayForecastEnergy', 'Prognose Energie heute (Summe)', 'SOLCAST.Energy', 30);
+        $this->RegisterVariableFloat('TodayForecastEnergy', 'Prognose Energie heute', 'SOLCAST.Energy', 30);
         $this->RegisterVariableFloat('TodayForecastEnergySite1', 'Prognose Energie heute - ' . $site1Name, 'SOLCAST.Energy', 31);
         $this->RegisterVariableFloat('TodayForecastEnergySite2', 'Prognose Energie heute - ' . $site2Name, 'SOLCAST.Energy', 32);
 
 
         // Prognose Energie morgen (gesamter Tag)
-        $this->RegisterVariableFloat('TomorrowForecastEnergy', 'Prognose Energie morgen (Summe)', 'SOLCAST.Energy', 40);
+        $this->RegisterVariableFloat('TomorrowForecastEnergy', 'Prognose Energie morgen', 'SOLCAST.Energy', 40);
         $this->RegisterVariableFloat('TomorrowForecastEnergySite1', 'Prognose Energie morgen - ' . $site1Name, 'SOLCAST.Energy', 41);
         $this->RegisterVariableFloat('TomorrowForecastEnergySite2', 'Prognose Energie morgen - ' . $site2Name, 'SOLCAST.Energy', 42);
 
         // Rohdaten / Zeitreihen als JSON-Puffer für eigene Visualisierungen (z.B. HTML-Box, Skripte)
-        $this->RegisterVariableString('ForecastJSON', 'Prognose Summe (JSON)', '', 50);
+        $this->RegisterVariableString('ForecastJSON', 'Prognose (JSON)', '', 50);
         $this->RegisterVariableString('ForecastJsonSite1', 'Prognose ' . $site1Name . ' (JSON)', '', 60);
         $this->RegisterVariableString('ForecastJsonSite2', 'Prognose ' . $site2Name . ' (JSON)', '', 70);
         IPS_SetHidden($this->GetIDForIdent('ForecastJSON'), true);
