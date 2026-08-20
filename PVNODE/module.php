@@ -328,25 +328,24 @@ class PVNODEForecast extends IPSModule
 
     private function MaintainVariables(): void
     {
-        $this->MaintainVariable('Status', 'Status', VARIABLETYPE_STRING, '', 0, true);
-        $this->MaintainVariable('LastUpdate', 'Letzter Abrufversuch', VARIABLETYPE_INTEGER, '~UnixTimestamp', 1, true);
-        $this->MaintainVariable('LastSuccess', 'Letzter erfolgr. Abruf', VARIABLETYPE_INTEGER, '~UnixTimestamp', 2, true);
-        $this->MaintainVariable('ErrorCount', 'Fehler in Folge', VARIABLETYPE_INTEGER, '', 3, true);
 
-        $this->MaintainVariable('CurrentPower', 'Aktuelle Leistung (W)', VARIABLETYPE_FLOAT, '~Watt', 10, true);
-        $this->MaintainVariable('Next1h', 'Prognose nächste 1h', VARIABLETYPE_FLOAT, '~Electricity', 11, true);
-        $this->MaintainVariable('Next4h', 'Prognose nächste 4h', VARIABLETYPE_FLOAT, '~Electricity', 12, true);
-        $this->MaintainVariable('RemainingToday', 'Rest heute', VARIABLETYPE_FLOAT, '~Electricity', 13, true);
-        $this->MaintainVariable('TodayTotal', 'Tagesertrag heute', VARIABLETYPE_FLOAT, '~Electricity', 14, true);
-        $this->MaintainVariable('Tomorrow', 'Tagesertrag morgen', VARIABLETYPE_FLOAT, '~Electricity', 15, true);
+        $this->MaintainVariable('WeatherCode', 'Wettercode aktuell', VARIABLETYPE_INTEGER, 'PVNODE.WeatherCode', 10, true);
+        $this->MaintainVariable('WeatherText', 'Wetter aktuell', VARIABLETYPE_STRING, '', 11, true);
+        $this->MaintainVariable('Temperature', 'Temperatur aktuell', VARIABLETYPE_FLOAT, '~Temperature', 12, true);
+        $this->MaintainVariable('WeatherCodeToday', 'Wettercode heute (dominant)', VARIABLETYPE_INTEGER, 'PVNODE.WeatherCode', 13, true);
 
-        // Wetter-Variablen immer anlegen: daily.weather_code/temp_min/temp_max liefert pvnode
-        // erfahrungsgemäß auch ohne include=weather mit; die Variablen bleiben einfach leer/0,
-        // falls im jeweiligen Plan wirklich keine Wetterdaten enthalten sind.
-        $this->MaintainVariable('WeatherCode', 'Wettercode aktuell', VARIABLETYPE_INTEGER, 'PVNODE.WeatherCode', 20, true);
-        $this->MaintainVariable('WeatherText', 'Wetter aktuell', VARIABLETYPE_STRING, '', 21, true);
-        $this->MaintainVariable('Temperature', 'Temperatur aktuell', VARIABLETYPE_FLOAT, '~Temperature', 22, true);
-        $this->MaintainVariable('WeatherCodeToday', 'Wettercode heute (dominant)', VARIABLETYPE_INTEGER, 'PVNODE.WeatherCode', 23, true);
+        $this->MaintainVariable('CurrentPower', 'Aktuelle Leistung (W)', VARIABLETYPE_FLOAT, '~Watt', 20, true);
+
+        $this->MaintainVariable('Next1h', 'Prognose nächste 1h', VARIABLETYPE_FLOAT, '~Electricity', 21, true);
+        $this->MaintainVariable('Next4h', 'Prognose nächste 4h', VARIABLETYPE_FLOAT, '~Electricity', 22, true);
+        $this->MaintainVariable('RemainingToday', 'Rest heute', VARIABLETYPE_FLOAT, '~Electricity', 23, true);
+        $this->MaintainVariable('TodayTotal', 'Tagesertrag heute', VARIABLETYPE_FLOAT, '~Electricity', 24, true);
+        $this->MaintainVariable('Tomorrow', 'Tagesertrag morgen', VARIABLETYPE_FLOAT, '~Electricity', 25, true);
+
+        $this->MaintainVariable('LastUpdate', 'Letzter Abrufversuch', VARIABLETYPE_INTEGER, '~UnixTimestamp', 80, true);
+        $this->MaintainVariable('LastSuccess', 'Letzter erfolgr. Abruf', VARIABLETYPE_INTEGER, '~UnixTimestamp', 81, true);
+        $this->MaintainVariable('Status', 'Status', VARIABLETYPE_STRING, '', 85, true);
+        $this->MaintainVariable('ErrorCount', 'Fehler in Folge', VARIABLETYPE_INTEGER, '', 86, true);
 
         $this->MaintainVariable('Buffer', 'Prognose-Buffer (JSON)', VARIABLETYPE_STRING, '', 90, true);
         IPS_SetHidden($this->GetIDForIdent('Buffer'), true); // technischer Buffer, im WebFront nicht relevant
