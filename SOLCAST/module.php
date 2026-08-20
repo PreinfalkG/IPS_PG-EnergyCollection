@@ -153,6 +153,8 @@ class SOLCASTForecast extends IPSModule
 
         $site1Active = $this->ReadPropertyBoolean('Site1Active') && $this->ReadPropertyString('Site1ResourceID') !== '';
         $site2Active = $this->ReadPropertyBoolean('Site2Active') && $this->ReadPropertyString('Site2ResourceID') !== '';
+        $site1Name = $this->ReadPropertyString('Site1Name');
+        $site2Name = $this->ReadPropertyString('Site2Name');        
 
         if (!$site1Active && !$site2Active) {
             $this->SetStatus(201);
