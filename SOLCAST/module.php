@@ -181,7 +181,7 @@ class SOLCASTForecast extends IPSModule
             return false;
         }
 
-        if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("Site1Series Cnt: %d | Site1Series Cnt: %d", count(site1Series), count(site2Series)), 0); }
+        if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("Site1Series Cnt: %d | Site1Series Cnt: %d", count($site1Series), count($site2Series)), 0); }
 
         // Beide Zeitreihen je Zeitstempel (period_end, Unix UTC) zur Summenreihe zusammenführen
         $sumSeries = $this->MergeAndSum($site1Series, $site2Series);
