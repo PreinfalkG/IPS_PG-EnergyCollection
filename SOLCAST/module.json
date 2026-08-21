@@ -5,7 +5,11 @@
     "vendor": "PreinfalkG",
     "url": "https://toolkit.solcast.com.au/",
     "type": 3,
-    "aliases": [],
+    "aliases": [
+        "PV Prognose",
+        "PV Forecast",
+        "SOLCAST"
+    ],
     "implemented": [],
     "parentRequirements": [],
     "childRequirements": [],

@@ -85,13 +85,34 @@
                     "name": "UpdateIntervalHours",
                     "caption": "Abrufintervall",
                     "options": [
-                        { "caption": "DEAKTIVIERT", "value": 0 },
-                        { "caption": "Alle 3 Stunden (8 Zyklen/Tag)", "value": 3 },
-                        { "caption": "Alle 4 Stunden (6 Zyklen/Tag)", "value": 4 },
-                        { "caption": "Alle 6 Stunden (4 Zyklen/Tag)", "value": 6 },
-                        { "caption": "Alle 8 Stunden (3 Zyklen/Tag)", "value": 8 },
-                        { "caption": "Alle 12 Stunden (2 Zyklen/Tag)", "value": 12 },
-                        { "caption": "Alle 24 Stunden (1 Zyklus/Tag)", "value": 24 }
+                        {
+                            "caption": "DEAKTIVIERT",
+                            "value": 0
+                        },
+                        {
+                            "caption": "Alle 3 Stunden (8 Zyklen/Tag)",
+                            "value": 3
+                        },
+                        {
+                            "caption": "Alle 4 Stunden (6 Zyklen/Tag)",
+                            "value": 4
+                        },
+                        {
+                            "caption": "Alle 6 Stunden (4 Zyklen/Tag)",
+                            "value": 6
+                        },
+                        {
+                            "caption": "Alle 8 Stunden (3 Zyklen/Tag)",
+                            "value": 8
+                        },
+                        {
+                            "caption": "Alle 12 Stunden (2 Zyklen/Tag)",
+                            "value": 12
+                        },
+                        {
+                            "caption": "Alle 24 Stunden (1 Zyklus/Tag)",
+                            "value": 24
+                        }
                     ]
                 },
                 {
@@ -99,9 +120,18 @@
                     "name": "ForecastVariant",
                     "caption": "Primärer Wert für Statusvariablen",
                     "options": [
-                        { "caption": "pv_estimate (Median / P50)", "value": 0 },
-                        { "caption": "pv_estimate10 (Pessimistisch / P10)", "value": 1 },
-                        { "caption": "pv_estimate90 (Optimistisch / P90)", "value": 2 }
+                        {
+                            "caption": "pv_estimate (Median / P50)",
+                            "value": 0
+                        },
+                        {
+                            "caption": "pv_estimate10 (Pessimistisch / P10)",
+                            "value": 1
+                        },
+                        {
+                            "caption": "pv_estimate90 (Optimistisch / P90)",
+                            "value": 2
+                        }
                     ]
                 },
                 {
@@ -114,10 +144,18 @@
             "type": "CheckBox",
             "name": "EnableDebug",
             "caption": "Enable Debug"
-        },             
+        },
         {
             "type": "Label",
-            "caption": "Letzter Abruf, nächster Abruf und Requests heute sind als Statusvariablen der Instanz sichtbar (unterhalb des Formulars)."
+            "caption": "Letzter Abruf, nächster Abruf, Requests heute sowie erfolgreiche/fehlgeschlagene Abrufe (mit Fehlergrund: RateLimit/Network/Http/ParseError) sind als Statusvariablen der Instanz sichtbar (unterhalb des Formulars)."
+        },
+        {
+            "type": "Label",
+            "caption": "Öffentliche Funktionen (auch bei FSOLAR und PVNODE identisch verfügbar): SOLCAST_LoadSeries(), SOLCAST_GetPowerAt(), SOLCAST_GetEnergyBetween(), SOLCAST_FindBestWindow(), SOLCAST_GetWeatherAt() (liefert bei SOLCAST immer null, da Solcast keine Wetterdaten liefert). Alle vier arbeiten auf Basis der oben gewählten Primärvariante (P50/P10/P90)."
+        },
+        {
+            "type": "Label",
+            "caption": "Zeitstempel-Helfer (ebenfalls modulübergreifend gleich): SOLCAST_GetDayRange($id,$Offset) liefert [start,end] eines Tages (0=heute,1=morgen,...); SOLCAST_GetTimeOnDay($id,$Offset,$Std,$Min,$Sek) für eine feste Uhrzeit an einem Tag; SOLCAST_GetRelativeTimestamp($id,'+2 weeks') als Fallback für beliebige Ausdrücke."
         }
     ],
     "actions": [
@@ -125,13 +163,38 @@
             "type": "Button",
             "caption": "Prognose jetzt abrufen",
             "onClick": "SOLCAST_RequestForecast($id);"
+        },
+        {
+            "type": "Button",
+            "caption": "Update-Statistik zurücksetzen",
+            "onClick": "SOLCAST_ResetUpdateStats($id);"
         }
     ],
     "status": [
-        { "code": 101, "icon": "active", "caption": "Modul wird erstellt" },
-        { "code": 102, "icon": "active", "caption": "SOLCAST Forecast aktiv" },
-        { "code": 201, "icon": "inactive", "caption": "Bitte API Key und mindestens eine PV-Fläche konfigurieren" },
-        { "code": 202, "icon": "error", "caption": "Fehler beim Abruf der Solcast API - siehe Meldungen" },
-        { "code": 203, "icon": "error", "caption": "Tageslimit an API Requests erreicht" }
+        {
+            "code": 101,
+            "icon": "active",
+            "caption": "Modul wird erstellt"
+        },
+        {
+            "code": 102,
+            "icon": "active",
+            "caption": "SOLCAST Forecast aktiv"
+        },
+        {
+            "code": 201,
+            "icon": "inactive",
+            "caption": "Bitte API Key und mindestens eine PV-Fläche konfigurieren"
+        },
+        {
+            "code": 202,
+            "icon": "error",
+            "caption": "Fehler beim Abruf der Solcast API - siehe Meldungen"
+        },
+        {
+            "code": 203,
+            "icon": "error",
+            "caption": "Tageslimit an API Requests erreicht"
+        }
     ]
 }

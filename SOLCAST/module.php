@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../libs/EnergyForecastCommon.php';
+
 /**
  * SOLCAST
  *
@@ -11,13 +13,23 @@ declare(strict_types=1);
  * Fragt bis zu zwei PV-Flächen (Resource IDs) einzeln ab und
  * berechnet zusätzlich die Summe beider Flächen je Zeitscheibe (30 Minuten).
  *
+ * Stellt dieselben öffentlichen Funktionen wie FSOLAR und PVNODE zur Verfügung:
+ * LoadSeries(), GetPowerAt(), GetEnergyBetween(), FindBestWindow(), GetWeatherAt()
+ * (siehe libs/EnergyForecastCommon.php). Solcast liefert keine Wetterdaten,
+ * GetWeatherAt() liefert daher immer null. GetPowerAt()/GetEnergyBetween()/
+ * FindBestWindow() arbeiten immer auf Basis der konfigurierten Primärvariante
+ * (P50/P10/P90, siehe ForecastVariant).
+ *
  * Modul-Präfix: SOLCAST
  */
 class SOLCASTForecast extends IPSModule
 {
+    use EnergyForecastCommon;
+
     private const API_BASE = 'https://api.solcast.com.au/rooftop_sites/';
 
     private $enableDebug = false;
+    private $seriesVariableIdent = 'ForecastJSON';
 
     public function __construct($InstanceID) {
     	parent::__construct($InstanceID);		// Diese Zeile nicht löschen
@@ -90,7 +102,7 @@ class SOLCASTForecast extends IPSModule
         $this->RegisterVariableFloat('TomorrowForecastEnergySite2', 'Prognose Energie morgen - ' . $site2Name, 'SOLCAST.Energy', 42);
 
         // Rohdaten / Zeitreihen als JSON-Puffer für eigene Visualisierungen (z.B. HTML-Box, Skripte)
-        $this->RegisterVariableString('ForecastJSON', 'Prognose (JSON)', '', 50);
+        $this->RegisterVariableString('ForecastJSON', 'Prognose Summe (JSON, Rohdaten je Zeitscheibe)', '', 50);
         $this->RegisterVariableString('ForecastJsonSite1', 'Prognose ' . $site1Name . ' (JSON)', '', 60);
         $this->RegisterVariableString('ForecastJsonSite2', 'Prognose ' . $site2Name . ' (JSON)', '', 70);
         IPS_SetHidden($this->GetIDForIdent('ForecastJSON'), true);
@@ -102,17 +114,20 @@ class SOLCASTForecast extends IPSModule
         $this->RegisterVariableInteger('NextUpdate', 'Nächster geplanter Abruf', '~UnixTimestamp', 81);
         $this->RegisterVariableInteger('RequestsTodayInfo', 'API Requests heute', '', 82);
 
+        // gemeinsame Update-Statistik (Erfolg/Fehler inkl. Grund) - siehe EnergyForecastCommon
+        $this->RegisterUpdateStatsVariables(85);
+
         $this->RegisterVariableString('ForecastChart', 'SOLCAST Prognose Chart', '~HTMLBox', 100);
 
         // Timer entsprechend Intervall setzen
         $intervalHours = $this->ReadPropertyInteger('UpdateIntervalHours');
         if($intervalHours > 0) {
             $this->SetTimerInterval('UpdateTimer', $intervalHours * 3600 * 1000);
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("UpdateTimer set to %d Hours", $intervalHours), 0); }
+            $this->dbg(__METHOD__, 'ApplyChanges', sprintf("UpdateTimer set to %d Hours", $intervalHours));
         } else {
             $this->SetTimerInterval('UpdateTimer', 0);
             $this->SetValue('NextUpdate', 0);
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, "UpdateTimer DEAKTIVIERT", 0); }
+            $this->dbg(__METHOD__, 'ApplyChanges', "UpdateTimer DEAKTIVIERT");
         }
 
         // Instanzstatus prüfen
@@ -127,6 +142,11 @@ class SOLCASTForecast extends IPSModule
         }
     }
 
+    // ==================== ÖFFENTLICHE MODULFUNKTIONEN ====================
+    // Automatisch verfügbar als SOLCAST_<Funktionsname>($InstanceID, ...)
+    // LoadSeries(), GetPowerAt(), GetEnergyBetween(), FindBestWindow(), GetWeatherAt()
+    // werden über den Trait EnergyForecastCommon bereitgestellt.
+
     /**
      * Fragt beide aktiven PV-Flächen ab, berechnet die Summe je Zeitscheibe
      * und schreibt Statusvariablen + JSON-Puffer.
@@ -138,7 +158,7 @@ class SOLCASTForecast extends IPSModule
         if ($apiKey === '') {
             $this->SetStatus(201);
             $logTxt = "SOLCAST: Kein API Key konfiguriert";
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }
+            $this->dbg(__METHOD__, 'Config', $logTxt);
             $this->LogMessage($logTxt, KL_WARNING);
             return false;
         }
@@ -146,20 +166,21 @@ class SOLCASTForecast extends IPSModule
         if (!$this->CheckAndConsumeRequestBudget()) {
             $this->SetStatus(203);
             $logTxt = "SOLCAST: Tageslimit an API Requests erreicht, Abruf übersprungen";
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }            
+            $this->dbg(__METHOD__, 'RateLimit', $logTxt);
             $this->LogMessage($logTxt, KL_WARNING);
+            $this->RecordUpdateError('RateLimit', $logTxt);
             return false;
         }
 
         $site1Active = $this->ReadPropertyBoolean('Site1Active') && $this->ReadPropertyString('Site1ResourceID') !== '';
         $site2Active = $this->ReadPropertyBoolean('Site2Active') && $this->ReadPropertyString('Site2ResourceID') !== '';
         $site1Name = $this->ReadPropertyString('Site1Name');
-        $site2Name = $this->ReadPropertyString('Site2Name');        
+        $site2Name = $this->ReadPropertyString('Site2Name');
 
         if (!$site1Active && !$site2Active) {
             $this->SetStatus(201);
             $logTxt = "SOLCAST: Keine aktive PV-Fläche konfiguriert";
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }                  
+            $this->dbg(__METHOD__, 'Config', $logTxt);
             $this->LogMessage($logTxt, KL_WARNING);
             return false;
         }
@@ -178,24 +199,27 @@ class SOLCASTForecast extends IPSModule
         if ($errorOccurred && empty($site1Series) && empty($site2Series)) {
             $logTxt = sprintf("ErrorOccurred or SiteSeries empty [Site1 Cnt: %d | Site2 Cnt: %d]", count($site1Series), count($site2Series));
             $this->LogMessage($logTxt, KL_ERROR);
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }
+            $this->dbg(__METHOD__, 'Result', $logTxt);
             $this->SetStatus(202);
             return false;
         }
 
-        if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("Site1Series Cnt: %d | Site1Series Cnt: %d", count($site1Series), count($site2Series)), 0); }
+        $this->dbg(__METHOD__, 'Result', sprintf("Site1Series Cnt: %d | Site2Series Cnt: %d", count($site1Series), count($site2Series)));
 
-        // Beide Zeitreihen je Zeitstempel (period_end, Unix UTC) zur Summenreihe zusammenführen
+        // Beide Zeitreihen je Zeitstempel (ts, Unix UTC) zur Summenreihe zusammenführen
         $sumSeries = $this->MergeAndSum($site1Series, $site2Series);
-
-        // JSON-Puffer schreiben (alle drei Varianten P10/P50/P90 enthalten -> für eigene Auswertung/Charts)
-        $this->SetValue('ForecastJsonSite1', json_encode(array_values($site1Series)));
-        $this->SetValue('ForecastJsonSite2', json_encode(array_values($site2Series)));
-        $this->SetValue('ForecastJSON', json_encode(array_values($sumSeries)));
 
         // primären Wert gemäß Konfiguration (P50/P10/P90) wählen
         $variant = $this->ReadPropertyInteger('ForecastVariant');
-        $variantKey = ['pv_estimate', 'pv_estimate10', 'pv_estimate90'][$variant] ?? 'pv_estimate';
+        $variantKey = ['p', 'p10', 'p90'][$variant] ?? 'p';
+
+        // JSON-Puffer schreiben (alle drei Varianten P10/P50/P90 bleiben enthalten -> für eigene
+        // Auswertung/Charts; 'p'/'e' werden zusätzlich auf die gewählte Primärvariante gemappt,
+        // damit die einheitlichen LoadSeries()/GetPowerAt()/GetEnergyBetween()/FindBestWindow()
+        // Funktionen automatisch die konfigurierte Variante nutzen.)
+        $this->SetValue('ForecastJsonSite1', json_encode(array_values($this->ApplyVariantToSeries($site1Series, $variantKey))));
+        $this->SetValue('ForecastJsonSite2', json_encode(array_values($this->ApplyVariantToSeries($site2Series, $variantKey))));
+        $this->SetValue('ForecastJSON', json_encode(array_values($this->ApplyVariantToSeries($sumSeries, $variantKey))));
 
         $now = time();
         $this->SetValue('CurrentPower', $this->FindCurrentValue($sumSeries, $variantKey, $now));
@@ -251,25 +275,24 @@ class SOLCASTForecast extends IPSModule
     /**
      * Liefert die zuletzt berechnete Summenprognose als PHP-Array,
      * z.B. für Nutzung in eigenen Skripten: SOLCAST_GetForecastArray($id).
+     * @deprecated Bitte künftig LoadSeries() verwenden (einheitlich über alle drei Module).
      */
     public function GetForecastArray(): array
     {
-        $json = $this->GetValue('ForecastJSON');
-        $data = json_decode((string) $json, true);
-        return is_array($data) ? $data : [];
+        return $this->LoadSeries() ?? [];
     }
     public function GetForecastArraySite1(): array
     {
         $json = $this->GetValue('ForecastJsonSite1');
         $data = json_decode((string) $json, true);
         return is_array($data) ? $data : [];
-    }  
+    }
     public function GetForecastArraySite2(): array
     {
         $json = $this->GetValue('ForecastJsonSite2');
         $data = json_decode((string) $json, true);
         return is_array($data) ? $data : [];
-    }      
+    }
 
 
     /**
@@ -287,7 +310,7 @@ class SOLCASTForecast extends IPSModule
 
         // Zeitachse aus der Summenreihe ableiten (enthält Vereinigung aller Zeitstempel)
         foreach ($sumSeries as $entry) {
-            $ts = $entry['period_end'];
+            $ts = $entry['ts'];
             if ($ts < $rangeStart || $ts >= $rangeEnd) {
                 continue;
             }
@@ -296,8 +319,8 @@ class SOLCASTForecast extends IPSModule
             $data2[] = round($site2Series[$ts][$variantKey] ?? 0, 3);
             $dataSum[] = round($entry[$variantKey] ?? 0, 3);
             // P10/P90 immer von der Summenreihe, unabhängig von der gewählten Primärvariante
-            $dataSum10[] = round($entry['pv_estimate10'] ?? 0, 3);
-            $dataSum90[] = round($entry['pv_estimate90'] ?? 0, 3);
+            $dataSum10[] = round($entry['p10'] ?? 0, 3);
+            $dataSum90[] = round($entry['p90'] ?? 0, 3);
         }
 
         $chartId = 'solcastChart' . $this->InstanceID;
@@ -403,7 +426,7 @@ HTML;
     {
         $url = self::API_BASE . rawurlencode($resourceId) . '/forecasts?format=json';
 
-        if($this->enableDebug) { $this->SendDebug(__METHOD__, $url, 0); }
+        $this->dbg(__METHOD__, 'Request', $url);
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -422,7 +445,17 @@ HTML;
         if ($response === false || $curlError !== '') {
             $logTxt = 'SOLCAST: cURL Fehler für Resource ' . $resourceId . ': ' . $curlError;
             $this->LogMessage($logTxt, KL_ERROR);
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }
+            $this->dbg(__METHOD__, 'Network', $logTxt);
+            $this->RecordUpdateError('Network', $logTxt);
+            $errorOccurred = true;
+            return [];
+        }
+
+        if ($httpCode === 429) {
+            $logTxt = 'SOLCAST: Rate Limit (429) für Resource ' . $resourceId . ' erreicht - Tageslimit prüfen. ' . substr((string) $response, 0, 300);
+            $this->LogMessage($logTxt, KL_ERROR);
+            $this->dbg(__METHOD__, 'RateLimit', $logTxt);
+            $this->RecordUpdateError('RateLimit', $logTxt);
             $errorOccurred = true;
             return [];
         }
@@ -430,7 +463,8 @@ HTML;
         if ($httpCode !== 200) {
             $logTxt = 'SOLCAST: HTTP ' . $httpCode . ' für Resource ' . $resourceId . ': ' . substr((string) $response, 0, 300);
             $this->LogMessage($logTxt, KL_ERROR);
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }
+            $this->dbg(__METHOD__, 'Http', $logTxt);
+            $this->RecordUpdateError('Http', $logTxt);
             $errorOccurred = true;
             return [];
         }
@@ -439,7 +473,8 @@ HTML;
         if (!is_array($data) || !isset($data['forecasts']) || !is_array($data['forecasts'])) {
             $logTxt = 'SOLCAST: Unerwartetes Antwortformat für Resource ' . $resourceId;
             $this->LogMessage($logTxt, KL_ERROR);
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }
+            $this->dbg(__METHOD__, 'ParseError', $logTxt);
+            $this->RecordUpdateError('ParseError', $logTxt);
             $errorOccurred = true;
             return [];
         }
@@ -453,14 +488,40 @@ HTML;
             if ($timestamp === false) {
                 continue;
             }
+            $pEstimate = (float) ($entry['pv_estimate'] ?? 0);
             $series[$timestamp] = [
-                'period_end'    => $timestamp,
-                'pv_estimate'   => (float) ($entry['pv_estimate'] ?? 0),
-                'pv_estimate10' => (float) ($entry['pv_estimate10'] ?? ($entry['pv_estimate'] ?? 0)),
-                'pv_estimate90' => (float) ($entry['pv_estimate90'] ?? ($entry['pv_estimate'] ?? 0))
+                'ts'  => $timestamp,
+                'p'   => $pEstimate,
+                'e'   => round($pEstimate * 0.5, 4), // 30-Minuten-Zeitscheibe
+                'p10' => (float) ($entry['pv_estimate10'] ?? $pEstimate),
+                'p90' => (float) ($entry['pv_estimate90'] ?? $pEstimate)
             ];
         }
         ksort($series);
+
+        $this->dbg(__METHOD__, 'Parse', sprintf('Resource %s: Series Cnt: %d', $resourceId, count($series)));
+        $this->RecordUpdateSuccess();
+
+        return $series;
+    }
+
+    /**
+     * Überschreibt 'p' (Leistung) und 'e' (Energie) einer Zeitreihe mit den Werten der
+     * gewählten Primärvariante (P50/P10/P90), damit die einheitlichen (modulübergreifenden)
+     * Funktionen LoadSeries()/GetPowerAt()/GetEnergyBetween()/FindBestWindow() automatisch
+     * konsistent zur Konfiguration (ForecastVariant) arbeiten. p10/p90 bleiben zusätzlich
+     * unverändert erhalten, z.B. für eigene Chart-Auswertungen.
+     */
+    private function ApplyVariantToSeries(array $series, string $variantKey): array
+    {
+        if ($variantKey === 'p') {
+            return $series;
+        }
+        foreach ($series as $ts => $entry) {
+            $value = (float) ($entry[$variantKey] ?? $entry['p'] ?? 0);
+            $series[$ts]['p'] = $value;
+            $series[$ts]['e'] = round($value * 0.5, 4);
+        }
         return $series;
     }
 
@@ -471,22 +532,23 @@ HTML;
 
         $result = [];
         foreach ($timestamps as $ts) {
-            $s1 = $site1Series[$ts] ?? ['pv_estimate' => 0, 'pv_estimate10' => 0, 'pv_estimate90' => 0];
-            $s2 = $site2Series[$ts] ?? ['pv_estimate' => 0, 'pv_estimate10' => 0, 'pv_estimate90' => 0];
+            $s1 = $site1Series[$ts] ?? ['p' => 0, 'e' => 0, 'p10' => 0, 'p90' => 0];
+            $s2 = $site2Series[$ts] ?? ['p' => 0, 'e' => 0, 'p10' => 0, 'p90' => 0];
 
             $result[$ts] = [
-                'period_end'    => $ts,
-                'pv_estimate'   => round($s1['pv_estimate'] + $s2['pv_estimate'], 4),
-                'pv_estimate10' => round($s1['pv_estimate10'] + $s2['pv_estimate10'], 4),
-                'pv_estimate90' => round($s1['pv_estimate90'] + $s2['pv_estimate90'], 4)
+                'ts'  => $ts,
+                'p'   => round($s1['p'] + $s2['p'], 4),
+                'e'   => round(($s1['e'] ?? 0) + ($s2['e'] ?? 0), 4),
+                'p10' => round($s1['p10'] + $s2['p10'], 4),
+                'p90' => round($s1['p90'] + $s2['p90'], 4)
             ];
         }
         return $result;
     }
 
     /**
-     * Sucht die Zeitscheibe, die "jetzt" abdeckt (period_end ist das ENDE einer 30-Minuten-Scheibe).
-     * Fällt auf die nächstgelegene zukünftige Scheibe zurück, falls "jetzt" außerhalb der Prognose liegt.
+     * Sucht die Zeitscheibe, die "jetzt" abdeckt (ts ist das ENDE einer 30-Minuten-Scheibe).
+     * Fällt auf die letzte bekannte Scheibe zurück, falls "jetzt" außerhalb der Prognose liegt.
      */
     public function FindCurrentValue(array $series, string $variantKey, int $now): float
     {
@@ -494,7 +556,7 @@ HTML;
             return 0.0;
         }
         foreach ($series as $entry) {
-            if ($entry['period_end'] >= $now) {
+            if ($entry['ts'] >= $now) {
                 return (float) ($entry[$variantKey] ?? 0);
             }
         }
@@ -504,14 +566,16 @@ HTML;
     }
 
     /**
-     * Summiert die Energie (kWh) aller Zeitscheiben, deren period_end im Bereich
-     * (rangeStart, rangeEnd] liegt. Basis: pv_estimate (kW) * 0,5h je 30-Minuten-Scheibe.
+     * Summiert die Energie (kWh) aller Zeitscheiben, deren ts im Bereich
+     * (rangeStart, rangeEnd] liegt. Basis: Leistung (kW) * 0,5h je 30-Minuten-Scheibe.
+     * Bei der Primärvariante (variantKey) wird die Energie separat aus der jeweiligen
+     * Leistungsspalte berechnet, damit P10/P90-Auswertungen konsistent bleiben.
      */
     public function CalculateEnergyInRange(array $series, string $variantKey, int $rangeStart, int $rangeEnd): float
     {
         $sum = 0.0;
         foreach ($series as $entry) {
-            if ($entry['period_end'] > $rangeStart && $entry['period_end'] <= $rangeEnd) {
+            if ($entry['ts'] > $rangeStart && $entry['ts'] <= $rangeEnd) {
                 $sum += ((float) ($entry[$variantKey] ?? 0)) * 0.5;
             }
         }
@@ -542,6 +606,7 @@ HTML;
         }
 
         $maxPerDay = $this->ReadPropertyInteger('MaxRequestsPerDay');
+        $this->dbg(__METHOD__, 'Budget', sprintf("today: %s | resetDay: %s | usedToday: %s | siteCount: %s | maxPerDay: %s", $today, $resetDay, $usedToday, $siteCount, $maxPerDay));
         if ($usedToday + $siteCount > $maxPerDay) {
             return false;
         }
@@ -550,16 +615,5 @@ HTML;
         $this->WriteAttributeInteger('RequestsToday', $usedToday);
         $this->SetValue('RequestsTodayInfo', $usedToday);
         return true;
-    }
-
-    private function RegisterProfileIfNotExists(string $name, string $icon, string $prefix, string $suffix, float $minValue, float $maxValue, float $stepSize, int $digits, int $variableType)
-    {
-        if (!IPS_VariableProfileExists($name)) {
-            IPS_CreateVariableProfile($name, $variableType);
-        }
-        IPS_SetVariableProfileText($name, $prefix, $suffix);
-        IPS_SetVariableProfileIcon($name, $icon);
-        IPS_SetVariableProfileValues($name, $minValue, $maxValue, $stepSize);
-        IPS_SetVariableProfileDigits($name, $digits);
     }
 }

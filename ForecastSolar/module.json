@@ -5,7 +5,11 @@
     "vendor": "PreinfalkG",
     "url": "https://doc.forecast.solar/doku.php?id=api:estimate",
     "type": 3,
-    "aliases": [],
+    "aliases": [
+        "PV Prognose",
+        "PV Forecast",
+        "Forecast.Solar"
+    ],
     "implemented": [],
     "parentRequirements": [],
     "childRequirements": [],

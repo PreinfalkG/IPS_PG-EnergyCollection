@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../libs/EnergyForecastCommon.php';
+
 /**
  * ForecastSolar
  *
@@ -11,14 +13,22 @@ declare(strict_types=1);
  * Fragt bis zu vier PV-Flächen einzeln ab (1 Request je Fläche) und berechnet
  * zusätzlich die Summe aller Flächen je Zeitscheibe.
  *
+ * Stellt dieselben öffentlichen Funktionen wie SOLCAST und PVNODE zur Verfügung:
+ * LoadSeries(), GetPowerAt(), GetEnergyBetween(), FindBestWindow(), GetWeatherAt()
+ * (siehe libs/EnergyForecastCommon.php). Forecast.Solar liefert keine Wetterdaten,
+ * GetWeatherAt() liefert daher immer null.
+ *
  * Modul-Präfix: FSOLAR
  */
 class ForecastSolar extends IPSModule
 {
+    use EnergyForecastCommon;
+
     private const API_BASE = 'https://api.forecast.solar/';
     private const SITE_COUNT = 4;
 
     private $enableDebug = false;
+    private $seriesVariableIdent = 'ForecastJSON';
 
     private const SITE_DEFAULTS = [
         1 => ['Name' => 'PV Hausdach',     'Latitude' => 48.325634, 'Longitude' => 14.426263, 'Declination' => 7,  'Azimuth' => 0,   'kWp' => 13.12],
@@ -73,7 +83,7 @@ class ForecastSolar extends IPSModule
         $this->RegisterVariableFloat('TodayRemainingEnergy', 'Prognose Restenergie heute', 'FSOLAR.Energy', 30);
         $this->RegisterVariableFloat('TomorrowForecastEnergy', 'Prognose Energie morgen', 'FSOLAR.Energy', 40);
         $this->RegisterVariableString('ForecastChart', 'Forecast.Solar Prognose Chart', '~HTMLBox', 45);
-        $this->RegisterVariableString('ForecastJSON', 'Prognose Summe (JSON)', '', 50);
+        $this->RegisterVariableString('ForecastJSON', 'Prognose Summe (JSON, Rohdaten je Zeitscheibe)', '', 50);
         IPS_SetHidden($this->GetIDForIdent('ForecastJSON'), true);
 
         // je PV-Fläche
@@ -93,14 +103,17 @@ class ForecastSolar extends IPSModule
         $this->RegisterVariableInteger('NextUpdate', 'Nächster geplanter Abruf', '~UnixTimestamp', 81);
         $this->RegisterVariableInteger('RequestsThisHourInfo', 'API Requests diese Stunde', '', 82);
 
+        // gemeinsame Update-Statistik (Erfolg/Fehler inkl. Grund) - siehe EnergyForecastCommon
+        $this->RegisterUpdateStatsVariables(85);
+
         $intervalMinutes = $this->ReadPropertyInteger('UpdateIntervalMinutes');
         if($intervalMinutes > 0) {
             $this->SetTimerInterval('UpdateTimer', $intervalMinutes * 60 * 1000);
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("UpdateTimer set to %d Min", $intervalMinutes), 0); }
+            $this->dbg(__METHOD__, 'ApplyChanges', sprintf("UpdateTimer set to %d Min", $intervalMinutes));
         } else {
             $this->SetTimerInterval('UpdateTimer', 0);
             $this->SetValue('NextUpdate', 0);
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, "UpdateTimer DEAKTIVIERT", 0); }
+            $this->dbg(__METHOD__, 'ApplyChanges', "UpdateTimer DEAKTIVIERT");
         }
 
         $anyActive = false;
@@ -112,6 +125,11 @@ class ForecastSolar extends IPSModule
         }
         $this->SetStatus($anyActive ? 102 : 201);
     }
+
+    // ==================== ÖFFENTLICHE MODULFUNKTIONEN ====================
+    // Automatisch verfügbar als FSOLAR_<Funktionsname>($InstanceID, ...)
+    // LoadSeries(), GetPowerAt(), GetEnergyBetween(), FindBestWindow(), GetWeatherAt()
+    // werden über den Trait EnergyForecastCommon bereitgestellt.
 
     /**
      * Fragt alle aktiven PV-Flächen ab, berechnet die Summe je Zeitscheibe
@@ -130,7 +148,7 @@ class ForecastSolar extends IPSModule
         if (empty($activeSites)) {
             $this->SetStatus(201);
             $logTxt = "Forecast.Solar: Keine aktive PV-Fläche konfiguriert";
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }                
+            $this->dbg(__METHOD__, 'Config', $logTxt);
             $this->LogMessage($logTxt, KL_WARNING);
             return false;
         }
@@ -138,14 +156,15 @@ class ForecastSolar extends IPSModule
         if (!$this->CheckAndConsumeRequestBudget(count($activeSites))) {
             $this->SetStatus(203);
             $logTxt = "Forecast.Solar: Stundenlimit an API Requests erreicht, Abruf übersprungen";
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }                   
+            $this->dbg(__METHOD__, 'RateLimit', $logTxt);
             $this->LogMessage($logTxt, KL_WARNING);
+            $this->RecordUpdateError('RateLimit', $logTxt);
             if(!$this->enableDebug) {
                 return false;
             }
         }
 
-        $siteSeries = [];  // $i => [ts => ['period_end'=>ts,'power'=>kW,'energy'=>kWh]]
+        $siteSeries = [];  // $i => [ts => ['ts'=>ts,'p'=>kW,'e'=>kWh]]
         $siteDaily = [];   // $i => ['Y-m-d' => kWh]
         $errorOccurred = false;
 
@@ -204,18 +223,18 @@ class ForecastSolar extends IPSModule
         $this->SetValue('NextUpdate', $now + $intervalMinutes * 60);
 
         $this->SetStatus($errorOccurred ? 202 : 102);
+        $this->dbg(__METHOD__, 'Result', sprintf('Sites=%d Errors=%s CurrentPower=%s TodayRemaining=%s', count($activeSites), $errorOccurred ? 'ja' : 'nein', $this->GetValue('CurrentPower'), $this->GetValue('TodayRemainingEnergy')));
         return true;
     }
 
     /**
      * Liefert die zuletzt berechnete Summenprognose als PHP-Array,
      * z.B. für Nutzung in eigenen Skripten: FSOLAR_GetForecastArray($id).
+     * @deprecated Bitte künftig LoadSeries() verwenden (einheitlich über alle drei Module).
      */
     public function GetForecastArray(): array
     {
-        $json = $this->GetValue('ForecastJSON');
-        $data = json_decode((string) $json, true);
-        return is_array($data) ? $data : [];
+        return $this->LoadSeries() ?? [];
     }
 
     // -----------------------------------------------------------------
@@ -240,7 +259,7 @@ class ForecastSolar extends IPSModule
             . $az . '/'
             . $this->FormatNumber($kwp, 3);
 
-        if($this->enableDebug) { $this->SendDebug(__METHOD__, $url, 0); }
+        $this->dbg(__METHOD__, 'Request', 'Fläche ' . $siteIndex . ': ' . $url);
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -258,7 +277,8 @@ class ForecastSolar extends IPSModule
         if ($response === false || $curlError !== '') {
             $logTxt = 'Forecast.Solar: cURL Fehler für Fläche ' . $siteIndex . ': ' . $curlError;
             $this->LogMessage($logTxt, KL_ERROR);
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }
+            $this->dbg(__METHOD__, 'Network', $logTxt);
+            $this->RecordUpdateError('Network', $logTxt);
             $errorOccurred = true;
             return $empty;
         }
@@ -266,7 +286,8 @@ class ForecastSolar extends IPSModule
         if ($httpCode === 429) {
             $logTxt = 'Forecast.Solar: Rate Limit (429) für Fläche ' . $siteIndex . ' erreicht - Intervall erhöhen oder Anzahl Flächen reduzieren. ' . $response;
             $this->LogMessage($logTxt, KL_ERROR);
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }            
+            $this->dbg(__METHOD__, 'RateLimit', $logTxt);
+            $this->RecordUpdateError('RateLimit', $logTxt);
             $errorOccurred = true;
             return $empty;
         }
@@ -274,7 +295,8 @@ class ForecastSolar extends IPSModule
         if ($httpCode !== 200) {
             $logTxt = 'Forecast.Solar: HTTP ' . $httpCode . ' für Fläche ' . $siteIndex . ': ' . substr((string) $response, 0, 300);
             $this->LogMessage($logTxt, KL_ERROR);
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }              
+            $this->dbg(__METHOD__, 'Http', $logTxt);
+            $this->RecordUpdateError('Http', $logTxt);
             $errorOccurred = true;
             return $empty;
         }
@@ -283,7 +305,8 @@ class ForecastSolar extends IPSModule
         if (!is_array($data) || !isset($data['result']['watt_hours_period']) || !is_array($data['result']['watt_hours_period'])) {
             $logTxt = 'Forecast.Solar: Unerwartetes Antwortformat für Fläche ' . $siteIndex;
             $this->LogMessage($logTxt, KL_ERROR);
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, $logTxt, 0); }    
+            $this->dbg(__METHOD__, 'ParseError', $logTxt);
+            $this->RecordUpdateError('ParseError', $logTxt);
             $errorOccurred = true;
             return $empty;
         }
@@ -300,9 +323,9 @@ class ForecastSolar extends IPSModule
             }
             $watt = $watts[$timeKey] ?? 0;
             $series[$timestamp] = [
-                'period_end' => $timestamp,
-                'power'      => round(((float) $watt) / 1000, 4),
-                'energy'     => round(((float) $whPeriod) / 1000, 4)
+                'ts' => $timestamp,
+                'p'  => round(((float) $watt) / 1000, 4),
+                'e'  => round(((float) $whPeriod) / 1000, 4)
             ];
         }
         ksort($series);
@@ -312,7 +335,8 @@ class ForecastSolar extends IPSModule
             $daily[$dateKey] = round(((float) $wh) / 1000, 3);
         }
 
-        if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("Daily Cnt: %d | Series Cnt: %d", count($daily), count($series)), 0); }
+        $this->dbg(__METHOD__, 'Parse', sprintf('Fläche %d: Daily Cnt: %d | Series Cnt: %d', $siteIndex, count($daily), count($series)));
+        $this->RecordUpdateSuccess();
 
         return ['series' => $series, 'daily' => $daily];
     }
@@ -331,13 +355,13 @@ class ForecastSolar extends IPSModule
             $power = 0.0;
             $energy = 0.0;
             foreach ($siteSeries as $series) {
-                $power += $series[$ts]['power'] ?? 0;
-                $energy += $series[$ts]['energy'] ?? 0;
+                $power += $series[$ts]['p'] ?? 0;
+                $energy += $series[$ts]['e'] ?? 0;
             }
             $result[$ts] = [
-                'period_end' => $ts,
-                'power'      => round($power, 4),
-                'energy'     => round($energy, 4)
+                'ts' => $ts,
+                'p'  => round($power, 4),
+                'e'  => round($energy, 4)
             ];
         }
         return $result;
@@ -363,7 +387,7 @@ class ForecastSolar extends IPSModule
     }
 
     /**
-     * Sucht die Zeitscheibe, die "jetzt" abdeckt (period_end ist das ENDE der Zeitscheibe).
+     * Sucht die Zeitscheibe, die "jetzt" abdeckt (ts ist das ENDE der Zeitscheibe).
      * Fällt auf die letzte bekannte Leistung zurück, falls "jetzt" außerhalb der Prognose liegt.
      */
     private function FindCurrentPower(array $series, int $now): float
@@ -372,24 +396,24 @@ class ForecastSolar extends IPSModule
             return 0.0;
         }
         foreach ($series as $entry) {
-            if ($entry['period_end'] >= $now) {
-                return (float) ($entry['power'] ?? 0);
+            if ($entry['ts'] >= $now) {
+                return (float) ($entry['p'] ?? 0);
             }
         }
         $last = end($series);
-        return (float) ($last['power'] ?? 0);
+        return (float) ($last['p'] ?? 0);
     }
 
     /**
-     * Summiert die Energie (kWh) aller Zeitscheiben mit period_end im Bereich (rangeStart, rangeEnd].
+     * Summiert die Energie (kWh) aller Zeitscheiben mit ts im Bereich (rangeStart, rangeEnd].
      * Nutzt die von Forecast.Solar bereits periodengenau gelieferte watt_hours_period.
      */
     private function CalculateRemainingEnergy(array $series, int $rangeStart, int $rangeEnd): float
     {
         $sum = 0.0;
         foreach ($series as $entry) {
-            if ($entry['period_end'] > $rangeStart && $entry['period_end'] <= $rangeEnd) {
-                $sum += (float) ($entry['energy'] ?? 0);
+            if ($entry['ts'] > $rangeStart && $entry['ts'] <= $rangeEnd) {
+                $sum += (float) ($entry['e'] ?? 0);
             }
         }
         return round($sum, 3);
@@ -405,7 +429,7 @@ class ForecastSolar extends IPSModule
         $usedThisHour = $this->ReadAttributeInteger('RequestsThisHour');
         $maxPerHour = $this->ReadPropertyInteger('MaxRequestsPerHour');
 
-        if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("currentHour: %s | resetHour: %s | usedThisHour: %s | maxPerHour: %s", $currentHour, $resetHour, $usedThisHour, $maxPerHour), 0); }
+        $this->dbg(__METHOD__, 'Budget', sprintf("currentHour: %s | resetHour: %s | usedThisHour: %s | maxPerHour: %s", $currentHour, $resetHour, $usedThisHour, $maxPerHour));
 
         if ($resetHour !== $currentHour) {
             $usedThisHour = 0;
@@ -431,7 +455,7 @@ class ForecastSolar extends IPSModule
     {
         $labels = [];
         foreach ($sumSeries as $entry) {
-            $ts = $entry['period_end'];
+            $ts = $entry['ts'];
             if ($ts < $rangeStart || $ts >= $rangeEnd) {
                 continue;
             }
@@ -440,14 +464,14 @@ class ForecastSolar extends IPSModule
 
         $dataSum = [];
         foreach (array_keys($labels) as $ts) {
-            $dataSum[] = round($sumSeries[$ts]['power'] ?? 0, 3);
+            $dataSum[] = round($sumSeries[$ts]['p'] ?? 0, 3);
         }
 
         $siteData = [];
         foreach ($siteSeries as $i => $series) {
             $vals = [];
             foreach (array_keys($labels) as $ts) {
-                $vals[] = round($series[$ts]['power'] ?? 0, 3);
+                $vals[] = round($series[$ts]['p'] ?? 0, 3);
             }
             $siteData[] = [
                 'name' => $siteNames[$i] ?? ('Fläche ' . $i),
@@ -511,22 +535,5 @@ class ForecastSolar extends IPSModule
 })();
 </script>
 HTML;
-    }
-
-    private function FormatNumber(float $value, int $decimals): string
-    {
-        $formatted = rtrim(rtrim(sprintf('%.' . $decimals . 'f', $value), '0'), '.');
-        return $formatted === '' || $formatted === '-' ? '0' : $formatted;
-    }
-
-    private function RegisterProfileIfNotExists(string $name, string $icon, string $prefix, string $suffix, float $minValue, float $maxValue, float $stepSize, int $digits, int $variableType)
-    {
-        if (!IPS_VariableProfileExists($name)) {
-            IPS_CreateVariableProfile($name, $variableType);
-        }
-        IPS_SetVariableProfileText($name, $prefix, $suffix);
-        IPS_SetVariableProfileIcon($name, $icon);
-        IPS_SetVariableProfileValues($name, $minValue, $maxValue, $stepSize);
-        IPS_SetVariableProfileDigits($name, $digits);
     }
 }

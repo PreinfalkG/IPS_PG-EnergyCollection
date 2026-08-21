@@ -27,12 +27,12 @@
             "caption": "Vergangene Tage, die bis zum heutigen Tag einbezogen werden sollen (0 = default)",
             "minimum": 0,
             "maximum": 30
-        },     
+        },
         {
             "type": "CheckBox",
             "name": "IncludeDefault",
             "caption": "Defaults abrufen (PV Power) - fällt bei fehlender Plan-Berechtigung automatisch auf reine Leistungsdaten zurück"
-        },        
+        },
         {
             "type": "CheckBox",
             "name": "IncludeWeather",
@@ -42,22 +42,22 @@
             "type": "CheckBox",
             "name": "IncludeIrradiance",
             "caption": "Irradiance abrufen (Bestrahlungsstärke)"
-        },  
+        },
         {
             "type": "CheckBox",
             "name": "IncludeClearsky",
             "caption": "Clearsky abrufen (Klarer Himmel)"
-        }, 
+        },
         {
             "type": "CheckBox",
             "name": "IncludeStrings",
             "caption": "String Details abrufen"
-        },     
+        },
         {
             "type": "CheckBox",
             "name": "IncludeVariability",
             "caption": "Variability abrufen (Variabilität)"
-        },                                           
+        },
         {
             "type": "NumberSpinner",
             "name": "UpdateInterval",
@@ -68,11 +68,11 @@
         {
             "type": "Label",
             "caption": "bei fehlender Plan-Berechtigung können Daten fehlen"
-        }, 
+        },
         {
             "type": "Label",
             "caption": "Irradiance :: GHI = Globale Horizontalstrahlung | DHI = Diffuse Horizontalstrahlung) | BNI / DNI = Direktstrahlung"
-        },                 
+        },
         {
             "type": "Label",
             "caption": "Free-Plan: 250 Cache-Anfragen/Monat -> Intervall ≥ 180 Min empfohlen (≈240/Monat). Light/Plus: 3.000/Monat -> ab 15 Min möglich."
@@ -88,18 +88,47 @@
             "type": "CheckBox",
             "name": "EnableDebug",
             "caption": "Enable Debug"
-        }          
+        },
+        {
+            "type": "Label",
+            "caption": "Aktuelle Leistung sowie der Prognose-Chart werden in kW geführt (wie bei FSOLAR/SOLCAST). Erfolgreiche/fehlgeschlagene Abrufe (mit Fehlergrund: RateLimit/Network/Config/Http/ParseError) sind als Statusvariablen der Instanz sichtbar (unterhalb des Formulars)."
+        },
+        {
+            "type": "Label",
+            "caption": "Öffentliche Funktionen (auch bei FSOLAR und SOLCAST identisch verfügbar): PVNODE_LoadSeries(), PVNODE_GetPowerAt(), PVNODE_GetEnergyBetween(), PVNODE_FindBestWindow(), PVNODE_GetWeatherAt()."
+        },
+        {
+            "type": "Label",
+            "caption": "Zeitstempel-Helfer (ebenfalls modulübergreifend gleich): PVNODE_GetDayRange($id,$Offset) liefert [start,end] eines Tages (0=heute,1=morgen,...); PVNODE_GetTimeOnDay($id,$Offset,$Std,$Min,$Sek) für eine feste Uhrzeit an einem Tag; PVNODE_GetRelativeTimestamp($id,'+2 weeks') als Fallback für beliebige Ausdrücke."
+        }
     ],
     "actions": [
         {
             "type": "Button",
             "caption": "Jetzt aktualisieren",
             "onClick": "PVNODE_UpdateForecast($id);"
+        },
+        {
+            "type": "Button",
+            "caption": "Update-Statistik zurücksetzen",
+            "onClick": "PVNODE_ResetUpdateStats($id);"
         }
     ],
     "status": [
-        { "code": 102, "icon": "active", "caption": "Aktiv" },
-        { "code": 104, "icon": "inactive", "caption": "API-Key oder Site-ID fehlt" },
-        { "code": 201, "icon": "error", "caption": "Mehrfacher Abruffehler - Status-Variable prüfen" }
+        {
+            "code": 102,
+            "icon": "active",
+            "caption": "Aktiv"
+        },
+        {
+            "code": 104,
+            "icon": "inactive",
+            "caption": "API-Key oder Site-ID fehlt"
+        },
+        {
+            "code": 201,
+            "icon": "error",
+            "caption": "Mehrfacher Abruffehler - Status-Variable prüfen"
+        }
     ]
 }

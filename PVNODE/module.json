@@ -12,5 +12,8 @@
     "parentRequirements": [],
     "childRequirements": [],
     "implemented": [],
+	"compatibility": {
+        "minimumIPSVersion": "6.0"
+    },
     "prefix": "PVNODE"
 }

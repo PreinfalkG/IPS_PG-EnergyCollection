@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../libs/EnergyForecastCommon.php';
+
 /**
  * Class PVNODEForecast
  * -------------------------------------------------------------
@@ -18,13 +20,19 @@ declare(strict_types=1);
  * Da IP-Symcon keine "zukünftigen" Variablenwerte speichern kann,
  * werden nur aussagekräftige "Jetzt"-Werte als Variablen abgelegt.
  * Der komplette Rest der Zeitreihe liegt zusätzlich als JSON-Buffer
- * vor und ist über PVNODE_GetPowerAt() / PVNODE_GetEnergyBetween() /
- * PVNODE_FindBestWindow() / PVNODE_GetWeatherAt() für beliebige
- * Zukunftszeitpunkte abfragbar.
+ * vor und ist über dieselben öffentlichen Funktionen wie bei FSOLAR
+ * und SOLCAST abfragbar: LoadSeries(), GetPowerAt(), GetEnergyBetween(),
+ * FindBestWindow(), GetWeatherAt() (siehe libs/EnergyForecastCommon.php).
+ *
+ * Hinweis Einheiten: Die Leistung wird - wie bei FSOLAR/SOLCAST - modulweit
+ * einheitlich in kW geführt (vorher: W). CurrentPower liefert damit ab
+ * dieser Version kW statt W.
  * -------------------------------------------------------------
  */
 class PVNODEForecast extends IPSModule
 {
+    use EnergyForecastCommon;
+
     private const API_BASE_URL = 'https://api.pvnode.com/v2/forecast/';
     private const ERROR_STATUS_THRESHOLD = 5;
     private const STATUS_ACTIVE = 102;
@@ -32,6 +40,7 @@ class PVNODEForecast extends IPSModule
     private const STATUS_ERROR = 201;
 
     private $enableDebug = false;
+    private $seriesVariableIdent = 'Buffer';
 
     // WMO-Wettercodes gemäß https://pvnode.com/docs/en/v2/guides/weather-codes
     private const WEATHER_CODES = [
@@ -107,10 +116,10 @@ class PVNODEForecast extends IPSModule
         if($interval > 0) {
             if ($interval < 5) { $interval = 5; }
             $this->SetTimerInterval('UpdateTimer', $interval * 60 * 1000);
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("UpdateTimer set to %d Min", $interval), 0); }
+            $this->dbg(__METHOD__, 'ApplyChanges', sprintf("UpdateTimer set to %d Min", $interval));
         } else {
             $this->SetTimerInterval('UpdateTimer', 0);
-            if($this->enableDebug) { $this->SendDebug(__METHOD__, "UpdateTimer DEAKTIVIERT", 0); }
+            $this->dbg(__METHOD__, 'ApplyChanges', "UpdateTimer DEAKTIVIERT");
         }
 
         if ($this->ReadPropertyString('APIKey') !== '' && $this->ReadPropertyString('SiteID') !== '') {
@@ -122,6 +131,8 @@ class PVNODEForecast extends IPSModule
 
     // ==================== ÖFFENTLICHE MODULFUNKTIONEN ====================
     // Automatisch verfügbar als PVNODE_<Funktionsname>($InstanceID, ...)
+    // LoadSeries(), GetPowerAt(), GetEnergyBetween(), FindBestWindow(), GetWeatherAt()
+    // werden über den Trait EnergyForecastCommon bereitgestellt.
 
     /**
      * Ruft die Prognose ab und aktualisiert alle Variablen. Wird per Timer
@@ -137,6 +148,8 @@ class PVNODEForecast extends IPSModule
             $this->SetValue('Status', 'FEHLER: API-Key oder Site-ID nicht konfiguriert');
             $this->SetValue('LastUpdate', time());
             $this->SetStatus(self::STATUS_INACTIVE);
+            $this->dbg(__METHOD__, 'Config', 'API-Key oder Site-ID fehlt');
+            $this->RecordUpdateError('Config', 'API-Key oder Site-ID nicht konfiguriert');
             return;
         }
 
@@ -172,11 +185,14 @@ class PVNODEForecast extends IPSModule
             $this->SetValue('ErrorCount', 0);
             $this->SetValue('LastSuccess', time());
             $this->SetStatus(self::STATUS_ACTIVE);
+            $this->RecordUpdateSuccess();
         } catch (Exception $e) {
             $errCount = $this->GetValue('ErrorCount') + 1;
             $this->SetValue('ErrorCount', $errCount);
             $this->SetValue('Status', 'FEHLER: ' . $e->getMessage());
             $this->LogMessage("PVNODE: Fehler beim Abruf ($errCount. in Folge): " . $e->getMessage(), KL_WARNING);
+            $this->dbg(__METHOD__, 'Error', sprintf('%d. Fehler in Folge: %s', $errCount, $e->getMessage()));
+            $this->RecordUpdateError($this->ClassifyError($e), $e->getMessage());
 
             // Alte Werte (Leistung, Buffer, Tagesprognosen...) bleiben bewusst unverändert -
             // besser der letzte gute Wert als ein überschriebener Fehlwert.
@@ -186,123 +202,6 @@ class PVNODEForecast extends IPSModule
         }
 
         $this->SetValue('LastUpdate', time());
-    }
-
-    /**
-     * Liefert die prognostizierte PV-Leistung (W) zu einem beliebigen Zeitpunkt
-     * (Vergangenheit im Buffer, aktuell oder Zukunft innerhalb des Prognosehorizonts).
-     * Nimmt den letzten bekannten Slot <= $Timestamp. Gibt null zurück, wenn dazu
-     * keine Daten vorliegen.
-     */
-    public function GetPowerAt(int $Timestamp): ?float
-    {
-        $series = $this->LoadSeries();
-        if ($series === null) {
-            return null;
-        }
-
-        $best = null;
-        foreach ($series as $point) {
-            if ($point['ts'] <= $Timestamp) {
-                $best = $point['p'];
-            } else {
-                break; // Serie ist zeitlich aufsteigend sortiert
-            }
-        }
-        return $best !== null ? (float)$best : null;
-    }
-
-    /**
-     * Summiert die prognostizierte Energie (kWh) im Intervall [$From, $To).
-     * Nützlich z.B. für "wie viel PV-Ertrag erwarte ich in den nächsten 2 Stunden"
-     * oder zur Planung eines EV-Ladefensters.
-     */
-    public function GetEnergyBetween(int $From, int $To): float
-    {
-        if ($To <= $From) {
-            return 0.0;
-        }
-        $series = $this->LoadSeries();
-        if ($series === null) {
-            return 0.0;
-        }
-
-        $sumKwh = 0.0;
-        foreach ($series as $point) {
-            if ($point['ts'] >= $From && $point['ts'] < $To) {
-                $sumKwh += (float)$point['p'] * 0.25 / 1000.0; // 15-Min-Slot als Rechteck angenähert
-            }
-        }
-        return round($sumKwh, 3);
-    }
-
-    /**
-     * Liefert Wettercode, Klartext und Temperatur zum nächsten Slot <= $Timestamp,
-     * sofern IncludeWeather aktiv ist und Daten vorliegen. Gibt sonst null zurück.
-     * @return array{code:int,text:string,temp:float}|null
-     */
-    public function GetWeatherAt(int $Timestamp): ?array
-    {
-        $series = $this->LoadSeries();
-        if ($series === null) {
-            return null;
-        }
-
-        $best = null;
-        foreach ($series as $point) {
-            if ($point['ts'] <= $Timestamp && isset($point['w'])) {
-                $best = $point;
-            } elseif ($point['ts'] > $Timestamp) {
-                break;
-            }
-        }
-        if ($best === null) {
-            return null;
-        }
-        return [
-            'code' => (int)$best['w'],
-            'text' => $this->DecodeWeatherCode((int)$best['w']),
-            'temp' => isset($best['t']) ? (float)$best['t'] : null,
-        ];
-    }
-
-    /**
-     * Findet das zusammenhängende Zeitfenster einer bestimmten Dauer innerhalb
-     * von [$From, $To), in dem am meisten PV-Energie erwartet wird. Praktisch
-     * z.B. für "wann soll das EV/E-Bike in den nächsten 12h laden".
-     * @return array{start:int,end:int,energy_kwh:float}|null
-     */
-    public function FindBestWindow(int $From, int $To, int $WindowSeconds): ?array
-    {
-        if ($WindowSeconds <= 0 || $To <= $From) {
-            return null;
-        }
-        $series = $this->LoadSeries();
-        if ($series === null) {
-            return null;
-        }
-
-        $relevant = array_values(array_filter($series, function ($p) use ($From, $To) {
-            return $p['ts'] >= $From && $p['ts'] < $To;
-        }));
-        if (count($relevant) === 0) {
-            return null;
-        }
-
-        $best = null;
-        foreach ($relevant as $start) {
-            $windowEnd = $start['ts'] + $WindowSeconds;
-            $sumKwh = 0.0;
-            foreach ($relevant as $p) {
-                if ($p['ts'] >= $start['ts'] && $p['ts'] < $windowEnd) {
-                    $sumKwh += (float)$p['p'] * 0.25 / 1000.0;
-                }
-            }
-            if ($best === null || $sumKwh > $best['energy_kwh']) {
-                $best = ['start' => $start['ts'], 'end' => $windowEnd, 'energy_kwh' => round($sumKwh, 3)];
-            }
-        }
-        return $best;
     }
 
     /**
@@ -316,6 +215,32 @@ class PVNODEForecast extends IPSModule
 
     // ==================== INTERNE HILFSFUNKTIONEN ====================
 
+    /**
+     * Ordnet eine gefangene Exception einer Fehlerkategorie zu, damit
+     * UpdateErrorCount/LastErrorType erkennen lassen, ob es sich um ein
+     * API-Limit, einen Netzwerk- oder einen sonstigen Fehler handelte.
+     */
+    private function ClassifyError(Exception $e): string
+    {
+        $msg = $e->getMessage();
+        if (str_contains($msg, 'cURL-Fehler')) {
+            return 'Network';
+        }
+        if (str_contains($msg, 'HTTP 429')) {
+            return 'RateLimit';
+        }
+        if (str_contains($msg, 'HTTP 401') || str_contains($msg, 'HTTP 403') || str_contains($msg, 'HTTP 404')) {
+            return 'Config';
+        }
+        if (str_contains($msg, 'HTTP ')) {
+            return 'Http';
+        }
+        if (str_contains($msg, 'JSON-Fehler') || str_contains($msg, 'Antwortstruktur') || str_contains($msg, 'Leere Antwort')) {
+            return 'ParseError';
+        }
+        return 'Other';
+    }
+
     private function RegisterProfiles(): void
     {
         if (!IPS_VariableProfileExists('PVNODE.WeatherCode')) {
@@ -324,30 +249,39 @@ class PVNODEForecast extends IPSModule
                 IPS_SetVariableProfileAssociation('PVNODE.WeatherCode', $code, $text, '', -1);
             }
         }
+        // eigene Leistungs-/Energieprofile, analog zu FSOLAR.Power/Energy und SOLCAST.Power/Energy
+        $this->RegisterProfileIfNotExists('PVNODE.Power', '', '', ' kW', 0, 0, 0, 2, VARIABLETYPE_FLOAT);
+        $this->RegisterProfileIfNotExists('PVNODE.Energy', '', '', ' kWh', 0, 0, 0, 2, VARIABLETYPE_FLOAT);
     }
 
     private function MaintainVariables(): void
     {
+        $this->MaintainVariable('Status', 'Status', VARIABLETYPE_STRING, '', 0, true);
+        $this->MaintainVariable('LastUpdate', 'Letzter Abrufversuch', VARIABLETYPE_INTEGER, '~UnixTimestamp', 1, true);
+        $this->MaintainVariable('LastSuccess', 'Letzter erfolgr. Abruf', VARIABLETYPE_INTEGER, '~UnixTimestamp', 2, true);
+        $this->MaintainVariable('ErrorCount', 'Fehler in Folge', VARIABLETYPE_INTEGER, '', 3, true);
 
-        $this->MaintainVariable('WeatherCode', 'Wettercode aktuell', VARIABLETYPE_INTEGER, 'PVNODE.WeatherCode', 10, true);
-        $this->MaintainVariable('WeatherText', 'Wetter aktuell', VARIABLETYPE_STRING, '', 11, true);
-        $this->MaintainVariable('Temperature', 'Temperatur aktuell', VARIABLETYPE_FLOAT, '~Temperature', 12, true);
-        $this->MaintainVariable('WeatherCodeToday', 'Wettercode heute (dominant)', VARIABLETYPE_INTEGER, 'PVNODE.WeatherCode', 13, true);
+        $this->MaintainVariable('CurrentPower', 'Aktuelle Leistung', VARIABLETYPE_FLOAT, 'PVNODE.Power', 10, true);
+        $this->MaintainVariable('Next1h', 'Prognose nächste 1h', VARIABLETYPE_FLOAT, 'PVNODE.Energy', 11, true);
+        $this->MaintainVariable('Next4h', 'Prognose nächste 4h', VARIABLETYPE_FLOAT, 'PVNODE.Energy', 12, true);
+        $this->MaintainVariable('RemainingToday', 'Rest heute', VARIABLETYPE_FLOAT, 'PVNODE.Energy', 13, true);
+        $this->MaintainVariable('TodayTotal', 'Tagesertrag heute', VARIABLETYPE_FLOAT, 'PVNODE.Energy', 14, true);
+        $this->MaintainVariable('Tomorrow', 'Tagesertrag morgen', VARIABLETYPE_FLOAT, 'PVNODE.Energy', 15, true);
 
-        $this->MaintainVariable('CurrentPower', 'Aktuelle Leistung (W)', VARIABLETYPE_FLOAT, '~Watt', 20, true);
+        // Wetter-Variablen immer anlegen: daily.weather_code/temp_min/temp_max liefert pvnode
+        // erfahrungsgemäß auch ohne include=weather mit; die Variablen bleiben einfach leer/0,
+        // falls im jeweiligen Plan wirklich keine Wetterdaten enthalten sind.
+        $this->MaintainVariable('WeatherCode', 'Wettercode aktuell', VARIABLETYPE_INTEGER, 'PVNODE.WeatherCode', 20, true);
+        $this->MaintainVariable('WeatherText', 'Wetter aktuell', VARIABLETYPE_STRING, '', 21, true);
+        $this->MaintainVariable('Temperature', 'Temperatur aktuell', VARIABLETYPE_FLOAT, '~Temperature', 22, true);
+        $this->MaintainVariable('WeatherCodeToday', 'Wettercode heute (dominant)', VARIABLETYPE_INTEGER, 'PVNODE.WeatherCode', 23, true);
 
-        $this->MaintainVariable('Next1h', 'Prognose nächste 1h', VARIABLETYPE_FLOAT, '~Electricity', 21, true);
-        $this->MaintainVariable('Next4h', 'Prognose nächste 4h', VARIABLETYPE_FLOAT, '~Electricity', 22, true);
-        $this->MaintainVariable('RemainingToday', 'Rest heute', VARIABLETYPE_FLOAT, '~Electricity', 23, true);
-        $this->MaintainVariable('TodayTotal', 'Tagesertrag heute', VARIABLETYPE_FLOAT, '~Electricity', 24, true);
-        $this->MaintainVariable('Tomorrow', 'Tagesertrag morgen', VARIABLETYPE_FLOAT, '~Electricity', 25, true);
+        // gemeinsame Update-Statistik (Erfolg/Fehler inkl. Grund) - siehe EnergyForecastCommon
+        $this->RegisterUpdateStatsVariables(30);
 
-        $this->MaintainVariable('LastUpdate', 'Letzter Abrufversuch', VARIABLETYPE_INTEGER, '~UnixTimestamp', 80, true);
-        $this->MaintainVariable('LastSuccess', 'Letzter erfolgr. Abruf', VARIABLETYPE_INTEGER, '~UnixTimestamp', 81, true);
-        $this->MaintainVariable('Status', 'Status', VARIABLETYPE_STRING, '', 85, true);
-        $this->MaintainVariable('ErrorCount', 'Fehler in Folge', VARIABLETYPE_INTEGER, '', 86, true);
+        $this->MaintainVariable('ForecastChart', 'PVNODE Prognose Chart', VARIABLETYPE_STRING, '~HTMLBox', 45, true);
 
-        $this->MaintainVariable('Buffer', 'Prognose-Buffer (JSON)', VARIABLETYPE_STRING, '', 90, true);
+        $this->MaintainVariable('Buffer', 'Prognose-Buffer (JSON, Rohdaten je Zeitscheibe)', VARIABLETYPE_STRING, '', 90, true);
         IPS_SetHidden($this->GetIDForIdent('Buffer'), true); // technischer Buffer, im WebFront nicht relevant
     }
 
@@ -392,7 +326,7 @@ class PVNODEForecast extends IPSModule
      */
     private function PerformRequest(string $url, string $apiKey, int $timeoutSec): array
     {
-        if($this->enableDebug) { $this->SendDebug(__METHOD__, $url, 0); }
+        $this->dbg(__METHOD__, 'Request', $url);
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
@@ -412,6 +346,8 @@ class PVNODEForecast extends IPSModule
         $httpCode  = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
+        $this->dbg(__METHOD__, 'Response', sprintf('HTTP %d, %d Bytes, curlErrno=%d', $httpCode, is_string($body) ? strlen($body) : 0, $curlErrNo));
+
         if ($curlErrNo !== 0) {
             throw new RuntimeException("cURL-Fehler ($curlErrNo): $curlErr");
         }
@@ -430,10 +366,6 @@ class PVNODEForecast extends IPSModule
             }
         }
 
-        if(false) {
-            $this->SendDebug(__METHOD__, (string)$body, 0);
-            //$this->SendDebug(__METHOD__, (string)$data, 0);
-        }
         return ['httpCode' => $httpCode, 'data' => $data, 'body' => (string)$body];
     }
 
@@ -467,7 +399,7 @@ class PVNODEForecast extends IPSModule
         $in1h = $nowTs + 3600;
         $in4h = $nowTs + 4 * 3600;
 
-        $currentPower   = null;
+        $currentPowerKw = null;
         $currentWeather = null;
         $currentTemp    = null;
         $next1hKwh      = 0.0;
@@ -478,21 +410,21 @@ class PVNODEForecast extends IPSModule
         foreach ($data['values'] as $row) {
 
             if (!isset($row['timestamp'], $row['pv_power'])) {
-                //if($this->enableDebug) { $this->SendDebug(__METHOD__, print_r($row, true), 0); }
+                $this->dbg(__METHOD__, 'Parse', 'Unvollständige Zeile übersprungen: ' . print_r($row, true));
                 continue; // defensiv: unvollständige Zeile überspringen
             }
             $slotDt = DateTime::createFromFormat('Y-m-d\TH:i:s', $row['timestamp'], $tz);
             if ($slotDt === false) {
+                $this->dbg(__METHOD__, 'Parse', 'Unerwartetes Zeitformat übersprungen: ' . $row['timestamp']);
                 continue; // defensiv: unerwartetes Zeitformat überspringen
             }
             $slotTs = $slotDt->getTimestamp();
-            $power  = (float)$row['pv_power'];
-            $energyKwh = $power * 0.25 / 1000.0;
-
-            //if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("%s :: %s | %s", $slotTs, $power, $energyKwh), 0); }
+            $powerW = (float)$row['pv_power'];
+            $powerKw = round($powerW / 1000.0, 4);
+            $energyKwh = round($powerW * 0.25 / 1000.0, 4); // 15-Minuten-Slot als Rechteck angenähert
 
             if ($slotTs <= $nowTs) {
-                $currentPower = $power;
+                $currentPowerKw = $powerKw;
                 if ($includeWeather && isset($row['weather_code'])) {
                     $currentWeather = (int)$row['weather_code'];
                     $currentTemp = isset($row['temp']) ? (float)$row['temp'] : null;
@@ -500,7 +432,7 @@ class PVNODEForecast extends IPSModule
             }
 
             if ($slotTs >= $nowTs) {
-                $point = ['ts' => $slotTs, 'p' => $power];
+                $point = ['ts' => $slotTs, 'p' => $powerKw, 'e' => $energyKwh];
                 if ($includeWeather && isset($row['weather_code'])) {
                     $point['w'] = (int)$row['weather_code'];
                     if (isset($row['temp'])) {
@@ -515,7 +447,7 @@ class PVNODEForecast extends IPSModule
                 }
 
                 if ($includeClearsky) {
-                    $point['pv_power_clearsky'] = isset($row['pv_power_clearsky']) ? (float)$row['pv_power_clearsky'] : null;
+                    $point['pv_power_clearsky'] = isset($row['pv_power_clearsky']) ? round((float)$row['pv_power_clearsky'] / 1000.0, 4) : null;
                 }    
                 
                 if ($includeStrings) {
@@ -523,11 +455,10 @@ class PVNODEForecast extends IPSModule
                 }                  
 
                 if ($includeVariability) {
-                    $point['pv_power_min'] = isset($row['pv_power_min']) ? (float)$row['pv_power_min'] : null;
-                    $point['pv_power_max'] = isset($row['pv_power_max']) ? (float)$row['pv_power_max'] : null;
+                    $point['pv_power_min'] = isset($row['pv_power_min']) ? round((float)$row['pv_power_min'] / 1000.0, 4) : null;
+                    $point['pv_power_max'] = isset($row['pv_power_max']) ? round((float)$row['pv_power_max'] / 1000.0, 4) : null;
                 } 
 
-                if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("Point :: %s ", print_r($point, true)), 0); }
                 $series[] = $point;
 
                 if ($slotTs < $in1h) {
@@ -539,23 +470,21 @@ class PVNODEForecast extends IPSModule
                 if ($slotDt->format('Y-m-d') === $today) {
                     $remainingToday += $energyKwh;
                 }
-                if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("1h: %s  | 4h: %s | remainingToday: %s", $next1hKwh, $next4hKwh, $remainingToday), 0); }
-                //if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("%s >= %s", $slotTs, $nowTs), 0); }
-            } else {
-                if($this->enableDebug) { $this->SendDebug(__METHOD__, sprintf("%s < %s", $slotTs, $nowTs), 0); }
             }
         }
 
-        if ($currentPower === null && count($series) > 0) {
-            $currentPower = $series[0]['p']; // vor Sonnenaufgang o.ä.
+        $this->dbg(__METHOD__, 'Compute', sprintf('SeriesCnt=%d Next1h=%.2f Next4h=%.2f RemainingToday=%.2f', count($series), $next1hKwh, $next4hKwh, $remainingToday));
+
+        if ($currentPowerKw === null && count($series) > 0) {
+            $currentPowerKw = $series[0]['p']; // vor Sonnenaufgang o.ä.
             $currentWeather = $series[0]['w'] ?? null;
             $currentTemp = $series[0]['t'] ?? null;
         }
-        if ($currentPower === null) {
-            $currentPower = 0.0;
+        if ($currentPowerKw === null) {
+            $currentPowerKw = 0.0;
         }
 
-        // - - - - DAILY Forecase - - - -
+        // - - - - DAILY Forecast - - - -
         $todayTotalKwh = null;
         $tomorrowTotalKwh = null;
         $todayWeatherCode = null;
@@ -572,7 +501,7 @@ class PVNODEForecast extends IPSModule
         }
 
         // ---- Werte schreiben ----
-        $this->SetValue('CurrentPower', round($currentPower, 1));
+        $this->SetValue('CurrentPower', round($currentPowerKw, 3));
         $this->SetValue('Next1h', round($next1hKwh, 2));
         $this->SetValue('Next4h', round($next4hKwh, 2));
         $this->SetValue('RemainingToday', round($remainingToday, 2));
@@ -600,22 +529,95 @@ class PVNODEForecast extends IPSModule
             'computed_at'  => $data['computed_at'] ?? null,
             'series'       => $series, // nur aktuelle + zukünftige Slots -> Buffer bleibt kompakt
         ], JSON_UNESCAPED_SLASHES));
+
+        // Chart (jetzt bis Ende des Prognosehorizonts, siehe BuildForecastChartHtml)
+        $this->SetValue('ForecastChart', $this->BuildForecastChartHtml($series, $nowTs));
     }
 
     /**
-     * Lädt und dekodiert die im Buffer gespeicherte Zeitreihe.
-     * Gibt null zurück, wenn noch kein erfolgreicher Abruf stattgefunden hat.
+     * Baut den Inhalt der HTMLBox-Variable ForecastChart: ein Chart.js Liniendiagramm
+     * der PV-Leistung (kW) über den gesamten verfügbaren Prognosehorizont.
+     * Enthält - sofern vorhanden - zusätzlich die Temperatur auf einer zweiten Achse.
      */
-    public function LoadSeries(): ?array
+    private function BuildForecastChartHtml(array $series, int $rangeStart): string
     {
-        $raw = $this->GetValue('Buffer');
-        if ($raw === '') {
-            return null;
+        $labels = [];
+        $dataPower = [];
+        $dataTemp = [];
+        $hasTemp = false;
+
+        foreach ($series as $point) {
+            $labels[] = date('d.m. H:i', $point['ts']);
+            $dataPower[] = round($point['p'] ?? 0, 3);
+            if (isset($point['t'])) {
+                $hasTemp = true;
+                $dataTemp[] = round($point['t'], 1);
+            } else {
+                $dataTemp[] = null;
+            }
         }
-        $data = json_decode($raw, true);
-        if (!is_array($data) || !isset($data['series']) || !is_array($data['series'])) {
-            return null;
+
+        $chartId = 'pvnodeChart' . $this->InstanceID;
+        $payload = json_encode([
+            'labels'  => $labels,
+            'power'   => $dataPower,
+            'temp'    => $hasTemp ? $dataTemp : null,
+        ]);
+
+        $tempDatasetJs = $hasTemp ? <<<JS
+    datasets.push({
+        label: 'Temperatur (°C)',
+        data: d.temp,
+        borderColor: '#e74c3c',
+        backgroundColor: 'transparent',
+        borderDash: [4, 3],
+        borderWidth: 1.5,
+        fill: false,
+        tension: 0.3,
+        pointRadius: 0,
+        yAxisID: 'y1'
+    });
+JS
+            : '';
+
+        $tempAxisJs = $hasTemp ? "y1: { position: 'right', title: { display: true, text: '°C' }, grid: { drawOnChartArea: false } }," : '';
+
+        return <<<HTML
+<div style="width:100%;height:300px;">
+    <canvas id="{$chartId}"></canvas>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function() {
+    var d = {$payload};
+    var datasets = [{
+        label: 'PV Prognose',
+        data: d.power,
+        borderColor: '#f2a900',
+        backgroundColor: 'rgba(242,169,0,0.15)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+        yAxisID: 'y'
+    }];
+    {$tempDatasetJs}
+    var ctx = document.getElementById('{$chartId}').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: { labels: d.labels, datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                y: { position: 'left', title: { display: true, text: 'kW' } },
+                {$tempAxisJs}
+            }
         }
-        return $data['series'];
+    });
+})();
+</script>
+HTML;
     }
 }
