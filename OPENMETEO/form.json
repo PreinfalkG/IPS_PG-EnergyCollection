@@ -1,0 +1,461 @@
+{
+    "elements": [
+        {
+            "type": "ExpansionPanel",
+            "caption": "Standort & Abruf",
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "Ein einziger API-Call deckt alle 4 Flächen ab (Open-Meteo, kostenlos, kein API-Key nötig)."
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Latitude",
+                    "caption": "Latitude",
+                    "digits": 6
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Longitude",
+                    "caption": "Longitude",
+                    "digits": 6
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "Timezone",
+                    "caption": "Zeitzone ('auto' = automatisch anhand Latitude/Longitude)"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "ForecastDays",
+                    "caption": "Prognosehorizont in Tagen (empfohlen 2-4)",
+                    "minimum": 0,
+                    "maximum": 16
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "PastDays",
+                    "caption": "Vergangene Tage mit abrufen",
+                    "minimum": 0,
+                    "maximum": 92
+                },
+                {
+                    "type": "Select",
+                    "name": "UpdateIntervalMinutes",
+                    "caption": "Abrufintervall",
+                    "options": [
+                        {
+                            "caption": "Manuell (Timer aus)",
+                            "value": 0
+                        },
+                        {
+                            "caption": "15 Minuten",
+                            "value": 15
+                        },
+                        {
+                            "caption": "30 Minuten",
+                            "value": 30
+                        },
+                        {
+                            "caption": "60 Minuten",
+                            "value": 60
+                        },
+                        {
+                            "caption": "120 Minuten",
+                            "value": 120
+                        },
+                        {
+                            "caption": "180 Minuten",
+                            "value": 180
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "PV-Berechnung (global)",
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "Wird auf alle aktiven Flächen angewendet. GTI-Transposition: isotropes Himmelsmodell (Liu-Jordan). Zelltemperatur: Faiman-Modell."
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "TempCoeffPercent",
+                    "caption": "Temperaturkoeffizient (%/°C, bezogen auf 25°C Zelltemperatur - negativ eingeben)",
+                    "digits": 2
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Albedo",
+                    "caption": "Bodenreflexion (Albedo, 0.0-1.0)",
+                    "digits": 2,
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "SystemLossPercent",
+                    "caption": "Systemverluste gesamt (Wechselrichter/Verkabelung/Verschmutzung, %)",
+                    "digits": 1,
+                    "minimum": 0,
+                    "maximum": 50
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "PV-Fläche 1 (PV Hausdach)",
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "Site1Active",
+                    "caption": "Aktiv"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "Site1Name",
+                    "caption": "Bezeichnung"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site1Declination",
+                    "caption": "Neigung (0=flach, 90=senkrecht)",
+                    "minimum": 0,
+                    "maximum": 90
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site1Azimuth",
+                    "caption": "Azimut (-180=Nord .. 0=Süd .. 180=Nord, -90=Ost, 90=West)",
+                    "minimum": -180,
+                    "maximum": 180
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site1kWp",
+                    "caption": "Modulleistung (kWp)",
+                    "digits": 2
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site1ThermalLossUc",
+                    "caption": "Faiman Uc (Montageart, W/m²K - Default 25 = freistehend/gut hinterlüftet, kleiner = wärmer/weniger Ertrag)",
+                    "digits": 2
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site1ThermalLossUv",
+                    "caption": "Faiman Uv (windabh. Term, W/(m²K)/(m/s) - Default 6.84)",
+                    "digits": 2
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "PV-Fläche 2 (PV Zaun)",
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "Site2Active",
+                    "caption": "Aktiv"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "Site2Name",
+                    "caption": "Bezeichnung"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site2Declination",
+                    "caption": "Neigung (0=flach, 90=senkrecht)",
+                    "minimum": 0,
+                    "maximum": 90
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site2Azimuth",
+                    "caption": "Azimut (-180=Nord .. 0=Süd .. 180=Nord, -90=Ost, 90=West)",
+                    "minimum": -180,
+                    "maximum": 180
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site2kWp",
+                    "caption": "Modulleistung (kWp)",
+                    "digits": 2
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site2ThermalLossUc",
+                    "caption": "Faiman Uc (Montageart, W/m²K - Default 25 = freistehend/gut hinterlüftet, kleiner = wärmer/weniger Ertrag)",
+                    "digits": 2
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site2ThermalLossUv",
+                    "caption": "Faiman Uv (windabh. Term, W/(m²K)/(m/s) - Default 6.84)",
+                    "digits": 2
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "PV-Fläche 3 (PV Garage Ost)",
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "Site3Active",
+                    "caption": "Aktiv"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "Site3Name",
+                    "caption": "Bezeichnung"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site3Declination",
+                    "caption": "Neigung (0=flach, 90=senkrecht)",
+                    "minimum": 0,
+                    "maximum": 90
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site3Azimuth",
+                    "caption": "Azimut (-180=Nord .. 0=Süd .. 180=Nord, -90=Ost, 90=West)",
+                    "minimum": -180,
+                    "maximum": 180
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site3kWp",
+                    "caption": "Modulleistung (kWp)",
+                    "digits": 2
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site3ThermalLossUc",
+                    "caption": "Faiman Uc (Montageart, W/m²K - Default 25 = freistehend/gut hinterlüftet, kleiner = wärmer/weniger Ertrag)",
+                    "digits": 2
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site3ThermalLossUv",
+                    "caption": "Faiman Uv (windabh. Term, W/(m²K)/(m/s) - Default 6.84)",
+                    "digits": 2
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "PV-Fläche 4 (PV Garage West)",
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "Site4Active",
+                    "caption": "Aktiv"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "Site4Name",
+                    "caption": "Bezeichnung"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site4Declination",
+                    "caption": "Neigung (0=flach, 90=senkrecht)",
+                    "minimum": 0,
+                    "maximum": 90
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site4Azimuth",
+                    "caption": "Azimut (-180=Nord .. 0=Süd .. 180=Nord, -90=Ost, 90=West)",
+                    "minimum": -180,
+                    "maximum": 180
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site4kWp",
+                    "caption": "Modulleistung (kWp)",
+                    "digits": 2
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site4ThermalLossUc",
+                    "caption": "Faiman Uc (Montageart, W/m²K - Default 25 = freistehend/gut hinterlüftet, kleiner = wärmer/weniger Ertrag)",
+                    "digits": 2
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Site4ThermalLossUv",
+                    "caption": "Faiman Uv (windabh. Term, W/(m²K)/(m/s) - Default 6.84)",
+                    "digits": 2
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "Zusätzliche Stundenwerte (optional)",
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "Werden zusätzlich je Stunde in der Series abgelegt (kein eigenes IP-Symcon-Objekt), abrufbar über LoadSeries()."
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Hourly_precipitation",
+                    "caption": "Niederschlag (mm)"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Hourly_rain",
+                    "caption": "Regen (mm)"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Hourly_showers",
+                    "caption": "Schauer (mm)"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Hourly_snowfall",
+                    "caption": "Schneefall (cm)"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Hourly_relative_humidity_2m",
+                    "caption": "Luftfeuchte (%)"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Hourly_surface_pressure",
+                    "caption": "Luftdruck (hPa)"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Hourly_uv_index",
+                    "caption": "UV-Index"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Hourly_visibility",
+                    "caption": "Sichtweite (m)"
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "Zusätzliche Tageswerte (optional)",
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "Werden als eigene 'Heute'-Variable angelegt + vollständig im DailyJSON-Puffer (LoadDaily())."
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Daily_sunshine_duration",
+                    "caption": "Sonnenscheindauer"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Daily_daylight_duration",
+                    "caption": "Tageslichtdauer"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Daily_rain_sum",
+                    "caption": "Regensumme"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Daily_showers_sum",
+                    "caption": "Schauersumme"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Daily_snowfall_sum",
+                    "caption": "Schneesumme"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Daily_precipitation_hours",
+                    "caption": "Niederschlagsstunden"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Daily_temperature_2m_max",
+                    "caption": "Temperatur Max"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Daily_temperature_2m_min",
+                    "caption": "Temperatur Min"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Daily_wind_direction_10m_dominant",
+                    "caption": "Windrichtung dominant"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Daily_uv_index_max",
+                    "caption": "UV-Index Max"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "Daily_shortwave_radiation_sum",
+                    "caption": "Strahlungssumme"
+                }
+            ]
+        },
+        {
+            "type": "CheckBox",
+            "name": "EnableDebug",
+            "caption": "Enable Debug"
+        },
+        {
+            "type": "Label",
+            "caption": "Letzter Abruf, nächster Abruf sowie erfolgreiche/fehlgeschlagene Abrufe (mit Fehlergrund: RateLimit/Network/Config/Http/ParseError) sind als Statusvariablen der Instanz sichtbar (unterhalb des Formulars)."
+        },
+        {
+            "type": "Label",
+            "caption": "Öffentliche Funktionen (identisch zu FSOLAR/SOLCAST/PVNODE verfügbar): OPENMETEO_LoadSeries(), OPENMETEO_GetPowerAt(), OPENMETEO_GetEnergyBetween(), OPENMETEO_FindBestWindow(), OPENMETEO_GetWeatherAt(). Zusätzlich: OPENMETEO_GetPowerAtSite($id,$Timestamp,$SiteIndex) für eine einzelne Fläche und OPENMETEO_LoadDaily($id) für die gewählten Tageswerte."
+        },
+        {
+            "type": "Label",
+            "caption": "Zeitstempel-Helfer (wie bei den anderen Modulen): OPENMETEO_GetDayRange(), OPENMETEO_GetTimeOnDay(), OPENMETEO_GetRelativeTimestamp()."
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "Prognose jetzt abrufen",
+            "onClick": "OPENMETEO_UpdateForecast($id);"
+        },
+        {
+            "type": "Button",
+            "caption": "Update-Statistik zurücksetzen",
+            "onClick": "OPENMETEO_ResetUpdateStats($id);"
+        }
+    ],
+    "status": [
+        {
+            "code": 102,
+            "icon": "active",
+            "caption": "Aktiv"
+        },
+        {
+            "code": 201,
+            "icon": "inactive",
+            "caption": "Keine Fläche aktiv"
+        },
+        {
+            "code": 202,
+            "icon": "error",
+            "caption": "Fehler beim letzten Abruf"
+        }
+    ]
+}

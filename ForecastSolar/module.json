@@ -6,9 +6,8 @@
     "url": "https://doc.forecast.solar/doku.php?id=api:estimate",
     "type": 3,
     "aliases": [
-        "PV Prognose",
-        "PV Forecast",
-        "Forecast.Solar"
+        "Forecast.Solar",
+        "https://forecast.solar/"
     ],
     "implemented": [],
     "parentRequirements": [],

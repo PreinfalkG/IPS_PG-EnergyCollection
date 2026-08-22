@@ -72,7 +72,11 @@ trait EnergyForecastCommon
 
     private function FormatNumber(float $value, int $decimals): string
     {
-        $formatted = rtrim(rtrim(sprintf('%.' . $decimals . 'f', $value), '0'), '.');
+        // number_format() liefert im Gegensatz zu sprintf('%f', ...) IMMER einen Punkt als
+        // Dezimaltrennzeichen, unabhängig vom Server-Locale (sprintf('%f') ist auf manchen
+        // PHP-Installationen locale-abhängig und lieferte z.B. bei deutschem Locale ein Komma -
+        // das hat u.a. Latitude/Longitude in API-URLs unbrauchbar gemacht).
+        $formatted = rtrim(rtrim(number_format($value, $decimals, '.', ''), '0'), '.');
         return $formatted === '' || $formatted === '-' ? '0' : $formatted;
     }
 
@@ -258,7 +262,17 @@ trait EnergyForecastCommon
      */
     public function GetPowerAt(int $Timestamp): ?float
     {
-        $series = $this->LoadSeries();
+        return $this->ComputePowerAt($this->LoadSeries(), $Timestamp);
+    }
+
+    /**
+     * Kernlogik von GetPowerAt() auf einer beliebigen Zeitreihe (statt zwingend der
+     * gespeicherten LoadSeries()). Damit können Module wie OPENMETEO, die aus den
+     * gespeicherten Rohdaten die Leistung erst bei Bedarf berechnen (statt sie zu
+     * speichern), dieselbe Fenster-/Fallback-Logik wiederverwenden.
+     */
+    private function ComputePowerAt(?array $series, int $Timestamp): ?float
+    {
         if ($series === null || count($series) === 0) {
             return null;
         }
@@ -279,11 +293,13 @@ trait EnergyForecastCommon
      */
     public function GetEnergyBetween(int $From, int $To): float
     {
-        if ($To <= $From) {
-            return 0.0;
-        }
-        $series = $this->LoadSeries();
-        if ($series === null) {
+        return $this->ComputeEnergyBetween($this->LoadSeries(), $From, $To);
+    }
+
+    /** Kernlogik von GetEnergyBetween() auf einer beliebigen Zeitreihe (siehe ComputePowerAt()). */
+    private function ComputeEnergyBetween(?array $series, int $From, int $To): float
+    {
+        if ($To <= $From || $series === null) {
             return 0.0;
         }
 
@@ -305,11 +321,13 @@ trait EnergyForecastCommon
      */
     public function FindBestWindow(int $From, int $To, int $WindowSeconds): ?array
     {
-        if ($WindowSeconds <= 0 || $To <= $From) {
-            return null;
-        }
-        $series = $this->LoadSeries();
-        if ($series === null) {
+        return $this->ComputeBestWindow($this->LoadSeries(), $From, $To, $WindowSeconds);
+    }
+
+    /** Kernlogik von FindBestWindow() auf einer beliebigen Zeitreihe (siehe ComputePowerAt()). */
+    private function ComputeBestWindow(?array $series, int $From, int $To, int $WindowSeconds): ?array
+    {
+        if ($WindowSeconds <= 0 || $To <= $From || $series === null) {
             return null;
         }
 
@@ -340,8 +358,8 @@ trait EnergyForecastCommon
 
     /**
      * Liefert Wettercode, Klartext und Temperatur zur Zeitscheibe, deren Ende
-     * ('ts') den angegebenen Zeitpunkt als erstes abdeckt. Nur PVNODE liefert
-     * Wetterdaten - Forecast.Solar und Solcast geben hier immer null zurück,
+     * ('ts') den angegebenen Zeitpunkt als erstes abdeckt. Nur PVNODE und OPENMETEO
+     * liefern Wetterdaten - Forecast.Solar und Solcast geben hier immer null zurück,
      * da deren APIs keine Wetterdaten liefern.
      * @return array{code:int,text:string,temp:?float}|null
      */
@@ -373,5 +391,126 @@ trait EnergyForecastCommon
             'text' => $text,
             'temp' => isset($best['t']) ? (float) $best['t'] : null,
         ];
+    }
+
+    // ==================== SONNENSTAND / GTI-TRANSPOSITION / FAIMAN (für OPENMETEO) ====================
+    // Rein rechnerische Helfer, keine externen Daten nötig - werden vom OPENMETEO-Modul
+    // genutzt, um aus GHI/DNI/DHI je Fläche live die Bestrahlungsstärke (GTI) und daraus
+    // über das Faiman-Modell die Zelltemperatur und Leistung zu berechnen.
+
+    /**
+     * Sonnenstand (Elevation, Azimuth) zu einem Zeitpunkt an einem Standort.
+     * Azimuth-Konvention wie bei FSOLAR: 0° = Süden, -90° = Osten, +90° = Westen.
+     *
+     * @return array{elevation:float,azimuth:float} Grad
+     */
+    private function SolarPosition(int $Timestamp, float $Latitude, float $Longitude): array
+    {
+        $dayOfYear = (int) gmdate('z', $Timestamp) + 1;
+        $hourUtc = (int) gmdate('G', $Timestamp) + ((int) gmdate('i', $Timestamp)) / 60 + ((int) gmdate('s', $Timestamp)) / 3600;
+
+        $gamma = 2 * M_PI / 365 * ($dayOfYear - 1 + ($hourUtc - 12) / 24);
+
+        $eqTime = 229.18 * (
+            0.000075
+            + 0.001868 * cos($gamma)
+            - 0.032077 * sin($gamma)
+            - 0.014615 * cos(2 * $gamma)
+            - 0.040849 * sin(2 * $gamma)
+        );
+
+        $decl = 0.006918
+            - 0.399912 * cos($gamma) + 0.070257 * sin($gamma)
+            - 0.006758 * cos(2 * $gamma) + 0.000907 * sin(2 * $gamma)
+            - 0.002697 * cos(3 * $gamma) + 0.00148 * sin(3 * $gamma);
+
+        $trueSolarTime = fmod($hourUtc * 60 + $eqTime + 4 * $Longitude, 1440);
+        if ($trueSolarTime < 0) {
+            $trueSolarTime += 1440;
+        }
+        $hourAngleDeg = $trueSolarTime / 4 - 180; // -180..+180
+
+        $latRad = deg2rad($Latitude);
+        $haRad = deg2rad($hourAngleDeg);
+
+        $cosZenith = sin($latRad) * sin($decl) + cos($latRad) * cos($decl) * cos($haRad);
+        $cosZenith = max(-1.0, min(1.0, $cosZenith));
+        $zenith = acos($cosZenith);
+        $elevation = 90 - rad2deg($zenith);
+
+        if (sin($zenith) < 1e-6) {
+            // Sonne (fast) im Zenit - Azimuth nicht sinnvoll definierbar, Süden annehmen.
+            $azimuthNorth = 180.0;
+        } else {
+            $cosAz = (sin($decl) - sin($latRad) * $cosZenith) / (cos($latRad) * sin($zenith));
+            $cosAz = max(-1.0, min(1.0, $cosAz));
+            $azimuthNorth = rad2deg(acos($cosAz));
+            if ($hourAngleDeg > 0) {
+                $azimuthNorth = 360 - $azimuthNorth;
+            }
+        }
+
+        // von "0=Norden, im Uhrzeigersinn" auf FSOLAR-Konvention "0=Süden" umrechnen, auf -180..180 normalisieren
+        $azimuthSouth = $azimuthNorth - 180;
+        if ($azimuthSouth > 180) {
+            $azimuthSouth -= 360;
+        } elseif ($azimuthSouth < -180) {
+            $azimuthSouth += 360;
+        }
+
+        return ['elevation' => $elevation, 'azimuth' => $azimuthSouth];
+    }
+
+    /**
+     * Transponiert GHI/DNI/DHI (horizontal) auf eine geneigte Fläche (isotropes
+     * Himmelsmodell nach Liu-Jordan). $Tilt/$Azimuth wie bei FSOLAR (0°=Süden).
+     * Liefert die Bestrahlungsstärke auf der Modulebene (GTI) in W/m².
+     */
+    private function CalculateGti(float $Ghi, float $Dni, float $Dhi, float $Tilt, float $Azimuth, float $SunElevation, float $SunAzimuth, float $Albedo = 0.2): float
+    {
+        if ($SunElevation <= 0) {
+            return 0.0;
+        }
+
+        $zenithRad = deg2rad(90 - $SunElevation);
+        $tiltRad = deg2rad($Tilt);
+        $azDiffRad = deg2rad($SunAzimuth - $Azimuth);
+
+        $cosIncidence = cos($zenithRad) * cos($tiltRad) + sin($zenithRad) * sin($tiltRad) * cos($azDiffRad);
+        $cosIncidence = max(0.0, $cosIncidence);
+
+        $beam = $Dni * $cosIncidence;
+        $diffuse = $Dhi * (1 + cos($tiltRad)) / 2;
+        $reflected = $Ghi * $Albedo * (1 - cos($tiltRad)) / 2;
+
+        return max(0.0, $beam + $diffuse + $reflected);
+    }
+
+    /**
+     * Zelltemperatur nach dem Faiman-Modell aus Umgebungstemperatur, Bestrahlungsstärke
+     * (GTI, W/m²) und Windgeschwindigkeit (m/s). $Uc/$Uv sind die Wärmeverlustkoeffizienten
+     * der Montageart (Default 25 / 6.84 - freistehende, gut hinterlüftete Aufständerung).
+     */
+    private function CalculateCellTemperature(float $AmbientTemp, float $Gti, float $WindSpeedMs, float $Uc = 25.0, float $Uv = 6.84): float
+    {
+        $denominator = $Uc + $Uv * $WindSpeedMs;
+        if ($denominator <= 0) {
+            return $AmbientTemp;
+        }
+        return $AmbientTemp + $Gti / $denominator;
+    }
+
+    /**
+     * DC-Leistung (kW) einer Fläche aus GTI, Zelltemperatur und Anlagendaten.
+     * $TempCoeffPercent ist der Temperaturkoeffizient in %/°C (üblich ca. -0.35 bis -0.45,
+     * daher negativ angeben), bezogen auf 25°C Zelltemperatur (STC).
+     */
+    private function CalculatePvPower(float $Gti, float $CellTemp, float $Kwp, float $TempCoeffPercent, float $SystemLossPercent): float
+    {
+        $tempFactor = 1 + ($TempCoeffPercent / 100) * ($CellTemp - 25);
+        $tempFactor = max(0.0, $tempFactor);
+        $lossFactor = max(0.0, 1 - $SystemLossPercent / 100);
+
+        return max(0.0, ($Gti / 1000) * $Kwp * $tempFactor * $lossFactor);
     }
 }

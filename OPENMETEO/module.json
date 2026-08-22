@@ -1,0 +1,16 @@
+{
+    "id": "{416BE0E0-B4F0-4E92-A534-2D33D4E8A61A}",
+    "name": "OPENMETEO Forecast",
+    "type": 3,
+    "vendor": "PreinfalkG",
+    "aliases": [
+        "Open-Meteo",
+        "OPENMETEO",
+        "https://open-meteo.com/"
+    ],
+    "url": "https://open-meteo.com/en/docs",
+    "parentRequirements": [],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "OPENMETEO"
+}

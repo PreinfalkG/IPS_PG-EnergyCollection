@@ -4,9 +4,7 @@
     "type": 3,
     "vendor": "PreinfalkG",
     "aliases": [
-        "PV Prognose",
-        "PV Forecast",
-        "pvnode"
+        "https://pvnode.com/"
     ],
     "url": "https://pvnode.com/docs/en/v2/introduction",
     "parentRequirements": [],
